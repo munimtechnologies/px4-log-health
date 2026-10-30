@@ -1,68 +1,39 @@
-"""Wait (up to 60 min) for studies/fleet-health-2026/GRADE.md and logs.jsonl on
-px4-log-health's main, then fetch gps_lag.py (0.1.0), fleet.py (0.1.1) and
-test_gps_lag.py from px4-gps-lag's main unchanged, save the study's
-logs.jsonl as health-logs.jsonl, and note whether this folder's health.py,
-fleet_health.py and test_health.py match main's (they will not until 0.2.0
-is published). Writes fetched.json.
+"""Fetch gps_lag.py (0.1.0), innov.py (0.2.0), fleet.py (0.1.1) and
+test_gps_lag.py from px4-gps-lag at a pinned commit. checkup.py uses
+gps_lag.py and innov.py; fleet_health.py and smoke.py use fleet.py; the tests
+use all of them. Writes fetched.json with their hashes.
+
+    python fetch_deps.py [commit]
+
 By MV2 of Munim, Inc.; written with AI agents. Apache-2.0."""
 
 import hashlib
 import json
 import sys
-import time
-import urllib.error
 import urllib.request
 
-RAW = "https://raw.githubusercontent.com/munimtechnologies/%s/main/"
-HERE = RAW % "px4-log-health"
-LAG = RAW % "px4-gps-lag"
-WAIT_FOR = ("studies/fleet-health-2026/GRADE.md", "studies/fleet-health-2026/logs.jsonl")
+PIN = "967b5ad92d04ca6ac7e29684b411fbf5df243e05"
+FILES = (("gps_lag.py", "0.1.0"), ("innov.py", "0.2.0"), ("fleet.py", "0.1.1"), ("test_gps_lag.py", None))
 
 
 def get(url):
-    req = urllib.request.Request(url, headers={"Cache-Control": "no-cache"})
-    with urllib.request.urlopen(req, timeout=120) as resp:
+    with urllib.request.urlopen(url, timeout=120) as resp:
         return resp.read()
 
 
-def sha(data):
-    return hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
+def main(ref=PIN):
+    fetched = {"px4-gps-lag": ref}
+    for name, version in FILES:
+        data = get("https://raw.githubusercontent.com/munimtechnologies/px4-gps-lag/%s/%s" % (ref, name))
+        if version and ('__version__ = "%s"' % version).encode() not in data:
+            sys.exit("px4-gps-lag's %s at %s is not %s" % (name, ref, version))
+        with open(name, "wb") as f:
+            f.write(data)
+        fetched[name] = hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
+    with open("fetched.json", "w") as f:
+        json.dump(fetched, f, indent=1)
+    print(json.dumps(fetched), flush=True)
 
 
-fetched = {}
-for path in WAIT_FOR:
-    for attempt in range(41):
-        try:
-            fetched[path] = {"on_main": True, "sha256": sha(get(HERE + path)), "waited_s": attempt * 90}
-            break
-        except urllib.error.HTTPError as exc:
-            if exc.code != 404 or attempt == 40:
-                sys.exit("%s is not on main (%s)" % (path, exc.code))
-            print("%s not on main yet; waiting 90 s" % path, flush=True)
-            time.sleep(90)
-
-for name, version in (("gps_lag.py", "0.1.0"), ("fleet.py", "0.1.1"), ("test_gps_lag.py", None)):
-    data = get(LAG + name)
-    if version and ('__version__ = "%s"' % version).encode() not in data:
-        sys.exit("px4-gps-lag's %s on main is not %s" % (name, version))
-    with open(name, "wb") as f:
-        f.write(data)
-    fetched["px4-gps-lag/" + name] = {"from_main": True, "sha256": sha(data)}
-
-rows = get(HERE + "studies/fleet-health-2026/logs.jsonl")
-with open("health-logs.jsonl", "wb") as f:
-    f.write(rows)
-fetched["studies/fleet-health-2026/logs.jsonl"]["lines"] = rows.count(b"\n")
-
-for name in ("health.py", "fleet_health.py", "test_health.py"):
-    with open(name, "rb") as f:
-        local = sha(f.read())
-    try:
-        remote = sha(get(HERE + name))
-    except urllib.error.HTTPError as exc:
-        remote = "missing (%s)" % exc.code
-    fetched[name] = {"local_sha256": local, "main_sha256": remote, "same_as_main": local == remote}
-
-with open("fetched.json", "w") as f:
-    json.dump(fetched, f, indent=1)
-print(json.dumps(fetched), flush=True)
+if __name__ == "__main__":
+    main(*sys.argv[1:2])

@@ -18,6 +18,44 @@ It prints one JSON line per log with each figure, the PX4 release, a list of pla
 
 **Fleet place (new in 0.2.0).** With `baseline.json` next to `health.py` (it is in this repo), each figure is also placed against 208 public flights, e.g. `"vib_median": "p75-p90"` or `"above p99"`. Vibration is placed only against logs from PX4 v1.13 or newer.
 
+## One report per flight (new in 0.3.0)
+
+`checkup.py` turns each log into a short Markdown report: the flags, a table of every figure with its place among 208 public flights, and a **GPS delay** verdict. The verdict measures how far the GPS lags the IMU with [px4-gps-lag](https://github.com/munimtechnologies/px4-gps-lag), compares that with the log's `EKF2_GPS_DELAY`, and checks the direction against EKF2's own GPS velocity innovations. It suggests a new `EKF2_GPS_DELAY` only when the measured lag is more than 50 ms off the setting and the innovations don't point the other way. That is the rule px4-gps-lag's fleet studies support ([GRADE-innov-confirm.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/fleet-2026/GRADE-innov-confirm.md)). A suggested value is a starting point to check with EKF2 log replay, not a setting to fly.
+
+```
+pip install numpy pyulog requests
+python fetch_deps.py                 # gps_lag.py and innov.py from px4-gps-lag, pinned commit
+python checkup.py flight.ulg [more.ulg ...] --md report.md --json rows.jsonl [--fail-on-flag]
+```
+
+Without `--md` the report goes to stdout. `--md` appends, so it can point at `$GITHUB_STEP_SUMMARY`. With `--fail-on-flag`, the exit code is 1 when any log raises a flag or gets a suggested `EKF2_GPS_DELAY`.
+
+Here is a real report on three public logs: [studies/fleet-health-2026/sample-report.md](studies/fleet-health-2026/sample-report.md).
+
+### As a GitHub Action
+
+Keep flight logs in a repository (for a test vehicle, say) and get the report in each run's job summary:
+
+```yaml
+name: PX4 log health
+on: [push, pull_request]
+jobs:
+  checkup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: munimtechnologies/px4-log-health@v0.3.0
+        with:
+          logs: "**/*.ulg"          # space-separated globs
+          fail-on-flag: "false"     # "true" fails the step on any flag or suggestion
+```
+
+The Action installs numpy and pyulog, fetches `gps_lag.py` and `innov.py` from px4-gps-lag at a pinned commit (input `gps-lag-ref`), and writes one JSON line per log to `px4-log-health.jsonl` (input `json`).
+
+**How it was checked.** A sealed run went through the unit tests (checkup, health and px4-gps-lag's tests). It then ran `checkup.py` and the Action's script, from a bare folder, on three real public logs: one more than 50 ms off its setting, one within 20 ms, and one from PX4 v1.12 or older. Every health figure, lag and implied innovation excess matched the figures the studies had recorded.
+
+**Known in 0.3.0.** When most public flights share one value (no clipping, for example), the fleet column shows the highest band that value reaches, e.g. "p75-p90" for zero clipping events. Read it as "like most flights". 0.3.1 will name the whole tied range instead.
+
 ## What changed in 0.2.0
 
 Two things the fleet study found are now handled:
@@ -46,11 +84,11 @@ Six of ten health predictions held. Our priors on vibration and jamming were too
 
 ```
 pip install numpy pyulog ijson requests
-python fetch_deps.py      # gps_lag.py, fleet.py and test_gps_lag.py from px4-gps-lag
-python -m unittest -v test_health test_gps_lag
+python fetch_deps.py      # gps_lag.py, innov.py, fleet.py and test_gps_lag.py from px4-gps-lag
+python -m unittest -v test_checkup test_health test_gps_lag
 ```
 
-`smoke.py` re-measures three real logs from the study and checks them against the recorded figures (it downloads from Flight Review).
+`smoke.py` re-measures three real logs from the study and checks them against the recorded figures. `smoke_checkup.py` does the same through `checkup.py` and the Action's script. Both download from Flight Review.
 
 ## Licence and credits
 

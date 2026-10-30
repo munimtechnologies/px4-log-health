@@ -1,0 +1,36 @@
+name: PX4 log health
+description: A health and GPS-delay report for PX4 flight logs (.ulg) in the job summary. By MV2 of Munim, Inc.; made with AI agents.
+author: MV2 of Munim, Inc.
+branding:
+  icon: activity
+  color: blue
+inputs:
+  logs:
+    description: Space-separated glob patterns of .ulg files (** matches folders).
+    required: false
+    default: "**/*.ulg"
+  fail-on-flag:
+    description: Fail the step if any log raises a flag or gets a suggested EKF2_GPS_DELAY ("true" or "false").
+    required: false
+    default: "false"
+  json:
+    description: Where to write one JSON line per log.
+    required: false
+    default: px4-log-health.jsonl
+  gps-lag-ref:
+    description: Commit of munimtechnologies/px4-gps-lag to take gps_lag.py and innov.py from.
+    required: false
+    default: 967b5ad92d04ca6ac7e29684b411fbf5df243e05
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - shell: bash
+      env:
+        INPUT_LOGS: ${{ inputs.logs }}
+        INPUT_FAIL_ON_FLAG: ${{ inputs.fail-on-flag }}
+        INPUT_JSON: ${{ inputs.json }}
+        INPUT_GPS_LAG_REF: ${{ inputs.gps-lag-ref }}
+      run: bash "$GITHUB_ACTION_PATH/action.sh"
