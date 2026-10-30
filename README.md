@@ -16,9 +16,25 @@ python health.py flight.ulg
 
 It prints one JSON line per log with each figure and a list of plain-language flags. It reads no position, so no location leaves the log. A flag is a reason to look at the log in Flight Review, not a diagnosis.
 
-## Fleet study
+**Two caveats the fleet study found (fixed in 0.2.0, now in testing):**
 
-`studies/fleet-health-2026/PLAN.md` pre-registers a measurement of how often public, real PX4 flights on Flight Review raise each flag (up to 300 logs, one per vehicle, from 2025-10-01 on). It also re-measures GPS lag on vehicles that [px4-gps-lag](https://github.com/munimtechnologies/px4-gps-lag)'s fleet-2026 study never saw, as an independent replication. `fleet_health.py` runs it. The grade, the per-log results and the fleet quantiles (`baseline.json`) will be added when the run is done.
+- On logs from **PX4 v1.12 or older**, the vibration metric is in m/s (computed from delta velocities), about 200 times smaller, so the bands don't apply. Don't read "green" on those logs as quiet.
+- A receiver **jamming state of 2** (u-blox: interference visible, fix kept) shows up in 70% of public logs that report a state. It is not by itself a sign of jamming. State 3 (critical) is rare (2 of 77).
+
+## What 208 public PX4 flights look like
+
+`studies/fleet-health-2026/` was pre-registered (`PLAN.md`) before any log was downloaded. It measured 208 real flights from 208 vehicles, uploaded to Flight Review from October 2025 on, one per vehicle ([GRADE.md](studies/fleet-health-2026/GRADE.md)):
+
+- **75%** raised at least one flag.
+- **Vibration:** among logs from PX4 v1.13 or newer, **51%** sit in Flight Review's orange or red band, and 27% in red. Across all logs, the pre-registered figure is 40%; it is lower because the older logs read low.
+- **Clipping:** 23% clipped the accelerometer in flight, 30% of loud logs against 18% of quiet ones.
+- **GPS jamming indicator:** 30% have a median above the docs' 40.
+- **Spoofing:** 8% of logs that report a spoofing state reached "indicated".
+- **Battery and failsafe:** 19% reached a low-battery warning, and 26% entered failsafe in flight.
+- **Motor saturation:** 4.5% of multicopters had a motor at full command for 5% of the flight or more.
+- **GPS lag replication:** on 98 of these logs, the median GPS lag was 113.8 ms, and 31% were more than 50 ms off their `EKF2_GPS_DELAY`. This replicates [px4-gps-lag](https://github.com/munimtechnologies/px4-gps-lag)'s fleet-2026 figures (99.8 ms; 29.6%) on vehicles that study never saw.
+
+Six of ten health predictions held. Our priors on vibration and jamming were too low. These are uploaded logs, often uploaded because something went wrong, so they are not the rate in the air. `logs.jsonl` (one line per log; vehicle ids hashed, no positions), `summary.json` and `baseline.json` (fleet quantiles) are in the study folder.
 
 ## Tests
 
