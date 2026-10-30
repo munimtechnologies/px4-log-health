@@ -11,7 +11,7 @@ import health
 
 
 def synthetic(vib_air=2.0, jam_air=50, spoof_at=50, sat_window=(200, 390), voltage=15.0,
-              land=((0, 1), (10, 0), (200, 1))):
+              land=((0, 1), (10, 0), (200, 1)), release=None, jam_state=1):
     """A log as read_health returns: on the ground 0-10 s, flying 10-200 s,
     on the ground to 210 s."""
     land_t = np.array([t for t, _ in land], dtype=float)
@@ -31,6 +31,7 @@ def synthetic(vib_air=2.0, jam_air=50, spoof_at=50, sat_window=(200, 390), volta
            "spoofing_state": np.ones(211, dtype=np.uint8),
            "satellites_used": np.full(211, 14, dtype=np.uint8),
            "eph": np.full(211, 0.8)}
+    gps["jamming_state"][60] = jam_state
     if spoof_at is not None:
         gps["spoofing_state"][spoof_at] = 2
     batt = {"timestamp": (t1 * 1e6).astype(np.int64),
@@ -55,7 +56,7 @@ def synthetic(vib_air=2.0, jam_air=50, spoof_at=50, sat_window=(200, 390), volta
         "battery_status": {0: batt},
         "vehicle_status": {0: status},
         "actuator_motors": {0: motors},
-    }}
+    }, "release": release}
 
 
 class Health(unittest.TestCase):
@@ -84,6 +85,7 @@ class Health(unittest.TestCase):
                      "failsafe", "full command"):
             self.assertIn(part, text)
         self.assertNotIn("vibration", text)
+        self.assertEqual(r["notes"], [])
         json.dumps(r)
 
     def test_vibration_bands(self):
@@ -94,6 +96,38 @@ class Health(unittest.TestCase):
         r = health.measure_health(synthetic(vib_air=6.0))
         self.assertEqual(r["vib_band"], "orange")
         self.assertIn("vibration orange", " ".join(r["flags"]))
+
+    def test_release_and_units(self):
+        self.assertEqual(health.release_name(0x010E03FF), "v1.14.3")
+        self.assertEqual(health.release_name(0x010E0300), "v1.14.3-0")
+        self.assertIsNone(health.release_name(None))
+        self.assertIsNone(health.release_name(0))
+        self.assertEqual(health.vib_units("v1.12.3"), "m/s")
+        self.assertEqual(health.vib_units("v1.11.3-0"), "m/s")
+        self.assertEqual(health.vib_units("v1.13.0-0"), "m/s^2")
+        self.assertEqual(health.vib_units("v1.16.0-128"), "m/s^2")
+        for unknown in (None, "v0.0.0", "v5.10.0", "v1", "custom"):
+            self.assertIsNone(health.vib_units(unknown), unknown)
+
+    def test_old_release_is_not_banded(self):
+        r = health.measure_health(synthetic(vib_air=6.0, release="v1.12.3"))
+        self.assertEqual(r["vib_units"], "m/s")
+        self.assertIsNone(r["vib_band"])
+        self.assertNotIn("vibration", " ".join(r["flags"]))
+        self.assertIn("not banded", " ".join(r["notes"]))
+        new = health.measure_health(synthetic(vib_air=6.0, release="v1.14.3"))
+        self.assertEqual((new["vib_units"], new["vib_band"]), ("m/s^2", "orange"))
+        unknown = health.measure_health(synthetic(vib_air=6.0))
+        self.assertEqual(unknown["vib_band"], "orange")
+        self.assertIn("assumed", unknown["vib_units"])
+
+    def test_jamming_state_two_is_noted_three_is_flagged(self):
+        warn = health.measure_health(synthetic(jam_air=0, jam_state=2))
+        self.assertEqual(warn["jam_state_max"], 2)
+        self.assertNotIn("reported jamming", " ".join(warn["flags"]))
+        self.assertIn("interference", " ".join(warn["notes"]))
+        crit = health.measure_health(synthetic(jam_air=0, jam_state=3))
+        self.assertIn("reported jamming (critical)", " ".join(crit["flags"]))
 
     def test_quiet_log(self):
         log = synthetic(jam_air=0, spoof_at=None, sat_window=None)
@@ -125,14 +159,36 @@ class Health(unittest.TestCase):
         self.assertNotIn("sat_share", r)
 
 
-def row(i, vib=2.0, clip=0, jam=10.0, batt=0, fs=False, sat=0.0, lag=None, vehicle=True):
+class Place(unittest.TestCase):
+    Q = {"n": 100, "p10": 1.0, "p25": 2.0, "p50": 3.0, "p75": 4.0, "p90": 5.0, "p99": 6.0}
+
+    def test_place(self):
+        self.assertEqual(health.place(0.5, self.Q), "below p10")
+        self.assertEqual(health.place(1.0, self.Q), "p10-p25")
+        self.assertEqual(health.place(3.5, self.Q), "p50-p75")
+        self.assertEqual(health.place(5.99, self.Q), "p90-p99")
+        self.assertEqual(health.place(6.0, self.Q), "above p99")
+        self.assertIsNone(health.place(None, self.Q))
+        self.assertIsNone(health.place(1.0, None))
+
+    def test_fleet_place(self):
+        base = {"fields": {"vib_median": self.Q, "flight_s": self.Q}}
+        r = health.measure_health(synthetic(release="v1.14.3"))
+        self.assertEqual(health.fleet_place(r, base), {"vib_median": "p25-p50", "flight_s": "above p99"})
+        old = health.measure_health(synthetic(release="v1.12.3"))
+        self.assertNotIn("vib_median", health.fleet_place(old, base))
+        self.assertIsNone(health.fleet_place({"health_ok": False}, base))
+        self.assertIsNone(health.fleet_place(r, None))
+
+
+def row(i, vib=2.0, clip=0, jam=10.0, batt=0, fs=False, sat=0.0, lag=None, vehicle=True, release="v1.14.3"):
     r = {"log_id": "log%d" % i, "vehicle": ("v%d" % i) if vehicle else None, "download": "ok",
          "health_ok": True, "vib_median": vib, "vib_band": health.vib_band(vib), "clip_count": clip,
          "jam_median": jam, "jam_p95": jam, "jam_state_reported": True, "jam_state_max": 1,
          "spoof_state_reported": True, "spoof_state_max": 1, "battery_warning_max": batt,
          "failsafe_in_flight": fs, "sat_share": sat, "flight_s": 300.0, "mav_type": "Quadrotor"}
     r["flags"] = health.flags(r)
-    r["lag"] = lag or {"passed": False, "reason": "too little manoeuvring"}
+    r["lag"] = lag or {"passed": False, "reason": "too little manoeuvring", "ver_sw_release": release}
     return r
 
 
@@ -190,6 +246,19 @@ class Fleet(unittest.TestCase):
         self.assertEqual(b["fields"]["vib_median"]["n"], 11)
         self.assertEqual(b["vib_band"]["red"], 1)
         json.dumps(b)
+
+    def test_baseline_vibration_only_from_v1_13_on(self):
+        rows = [row(i, vib=8.0) for i in range(10)]
+        rows += [row(10 + i, vib=0.02, release="v1.12.3") for i in range(10)]
+        rows += [row(20 + i, vib=0.03, release=None) for i in range(5)]
+        rows[-1]["release"] = "v1.15.0"                  # health.py 0.2.0 rows carry it themselves
+        b = fh.baseline(rows)
+        self.assertEqual(b["fields"]["vib_median"]["n"], 11)
+        self.assertEqual(b["fields"]["flight_s"]["n"], 25)
+        self.assertEqual(b["vib_band"], {"green": 1, "orange": 10, "red": 0})
+        self.assertEqual(fh.row_release({"lag": {"ver_sw_release": "v1.12.3"}}), "v1.12.3")
+        e = fh.explore(rows)
+        self.assertEqual(e["by_vib_units"]["m/s"]["n"], 10)
 
     def test_rescore_round_trip(self):
         import os

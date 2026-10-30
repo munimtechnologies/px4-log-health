@@ -1,10 +1,9 @@
-"""Nothing is downloaded from Flight Review before the plan is public: wait (up
-to 60 min) for studies/fleet-health-2026/PLAN.md on px4-log-health's main,
-then fetch gps_lag.py (0.1.0), fleet.py (0.1.1) and test_gps_lag.py from
-px4-gps-lag's main unchanged, save its studies/fleet-2026/v1/logs.jsonl as
-v1-logs.jsonl (the logs and vehicles this study leaves out), and note whether
-this folder's health.py, fleet_health.py and test_health.py match main's.
-Writes fetched.json.
+"""Wait (up to 60 min) for studies/fleet-health-2026/GRADE.md and logs.jsonl on
+px4-log-health's main, then fetch gps_lag.py (0.1.0), fleet.py (0.1.1) and
+test_gps_lag.py from px4-gps-lag's main unchanged, save the study's
+logs.jsonl as health-logs.jsonl, and note whether this folder's health.py,
+fleet_health.py and test_health.py match main's (they will not until 0.2.0
+is published). Writes fetched.json.
 By MV2 of Munim, Inc.; written with AI agents. Apache-2.0."""
 
 import hashlib
@@ -17,7 +16,7 @@ import urllib.request
 RAW = "https://raw.githubusercontent.com/munimtechnologies/%s/main/"
 HERE = RAW % "px4-log-health"
 LAG = RAW % "px4-gps-lag"
-PLAN = "studies/fleet-health-2026/PLAN.md"
+WAIT_FOR = ("studies/fleet-health-2026/GRADE.md", "studies/fleet-health-2026/logs.jsonl")
 
 
 def get(url):
@@ -31,15 +30,16 @@ def sha(data):
 
 
 fetched = {}
-for attempt in range(41):
-    try:
-        fetched[PLAN] = {"on_main": True, "sha256": sha(get(HERE + PLAN)), "waited_s": attempt * 90}
-        break
-    except urllib.error.HTTPError as exc:
-        if exc.code != 404 or attempt == 40:
-            sys.exit("%s is not on main (%s)" % (PLAN, exc.code))
-        print("%s not on main yet; waiting 90 s" % PLAN, flush=True)
-        time.sleep(90)
+for path in WAIT_FOR:
+    for attempt in range(41):
+        try:
+            fetched[path] = {"on_main": True, "sha256": sha(get(HERE + path)), "waited_s": attempt * 90}
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code != 404 or attempt == 40:
+                sys.exit("%s is not on main (%s)" % (path, exc.code))
+            print("%s not on main yet; waiting 90 s" % path, flush=True)
+            time.sleep(90)
 
 for name, version in (("gps_lag.py", "0.1.0"), ("fleet.py", "0.1.1"), ("test_gps_lag.py", None)):
     data = get(LAG + name)
@@ -49,10 +49,10 @@ for name, version in (("gps_lag.py", "0.1.0"), ("fleet.py", "0.1.1"), ("test_gps
         f.write(data)
     fetched["px4-gps-lag/" + name] = {"from_main": True, "sha256": sha(data)}
 
-rows = get(LAG + "studies/fleet-2026/v1/logs.jsonl")
-with open("v1-logs.jsonl", "wb") as f:
+rows = get(HERE + "studies/fleet-health-2026/logs.jsonl")
+with open("health-logs.jsonl", "wb") as f:
     f.write(rows)
-fetched["px4-gps-lag/studies/fleet-2026/v1/logs.jsonl"] = {"lines": rows.count(b"\n"), "sha256": sha(rows)}
+fetched["studies/fleet-health-2026/logs.jsonl"]["lines"] = rows.count(b"\n")
 
 for name in ("health.py", "fleet_health.py", "test_health.py"):
     with open(name, "rb") as f:

@@ -14,6 +14,9 @@ deleted. No position is read. Vehicle ids are published only as a hash.
 Uses fleet.py (px4-gps-lag 0.1.1) for the public log list and the download,
 so the eligibility rules and the stop-on-block are the same as fleet-2026's.
 
+0.2.0: baseline.json takes its vibration quantiles only from logs of PX4 v1.13
+or newer, where the metric is in m/s^2 (studies/fleet-health-2026/GRADE.md).
+
 By MV2 of Munim, Inc.; written with AI agents. Apache-2.0.
 """
 
@@ -30,7 +33,7 @@ import fleet
 import gps_lag as gl
 import health
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 SEED = 20261031
 DELAY_S = 10.0
@@ -38,6 +41,7 @@ LAG_KEYS = ("passed", "reason", "lag_ms", "se_ms", "param_gps_delay_ms", "lag_mi
             "gps_bus", "ver_sw_release", "gps_logged_dt_s", "pairs", "r2", "excitation_m_s2")
 BASELINE_FIELDS = ("flight_s", "vib_median", "vib_p95", "clip_per_min", "jam_median", "jam_p95",
                    "sats_median", "eph_median", "sat_share")
+VIB_FIELDS = ("vib_median", "vib_p95")
 
 
 def excluded(path):
@@ -83,6 +87,12 @@ def _quantiles(xs):
         return round(xs[lo] + (xs[hi] - xs[lo]) * (k - lo), 4)
     return {"n": len(xs), "p10": q(0.10), "p25": q(0.25), "p50": q(0.50), "p75": q(0.75),
             "p90": q(0.90), "p99": q(0.99)}
+
+
+def row_release(r):
+    """The PX4 release of a measured row: health.py 0.2.0 records it; 0.1.0
+    rows have it only in the gps_lag figures."""
+    return r.get("release") or (r.get("lag") or {}).get("ver_sw_release")
 
 
 def summarise(rows):
@@ -173,14 +183,22 @@ def summarise(rows):
 
 
 def baseline(rows):
-    """Fleet quantiles of each figure, for health.py to place a log against."""
+    """Fleet quantiles of each figure, for health.py to place a log against.
+    Vibration comes only from logs whose release says m/s^2 (PX4 v1.13+)."""
     ok = [r for r in rows if r.get("health_ok")]
+    banded = [r for r in ok if health.vib_units(row_release(r)) == "m/s^2"]
+    fields = {}
+    for k in BASELINE_FIELDS:
+        fields[k] = _quantiles([r.get(k) for r in (banded if k in VIB_FIELDS else ok)])
     return {
         "note": ("Quantiles over the public PX4 Flight Review logs of studies/fleet-health-2026 "
                  "(one log per vehicle, real flights of at least 4 minutes from 2025-10-01 on). "
-                 "Data derived from Flight Review logs, CC BY 4.0."),
-        "fields": {k: _quantiles([r.get(k) for r in ok]) for k in BASELINE_FIELDS},
-        "vib_band": {b: sum(1 for r in ok if r.get("vib_band") == b) for b in ("green", "orange", "red")},
+                 "Vibration quantiles and bands use only logs of PX4 v1.13 or newer, where the "
+                 "metric is in m/s^2. Data derived from Flight Review logs, CC BY 4.0."),
+        "fleet_health": __version__,
+        "fields": fields,
+        "vib_band": {b: sum(1 for r in banded if health.vib_band(r.get("vib_median")) == b)
+                     for b in ("green", "orange", "red")},
     }
 
 
@@ -201,9 +219,12 @@ def explore(rows):
         "note": "not pre-registered; descriptive only",
         "by_mav_type": by(lambda r: r.get("mav_type") or "unknown"),
         "by_multicopter": by(lambda r: str(r.get("multicopter"))),
+        "by_vib_units": by(lambda r: health.vib_units(row_release(r)) or "unknown"),
         "vib_worst_imu_orange_or_red": _share([r for r in ok if r.get("vib_median_worst_imu") is not None],
                                               lambda r: r["vib_median_worst_imu"] >= health.VIB_ORANGE),
         "jam_reported": _share([r for r in ok if "jam_reported" in r], lambda r: r["jam_reported"]),
+        "jam_state_max": {str(k): sum(1 for r in ok if r.get("jam_state_reported") and r.get("jam_state_max") == k)
+                          for k in range(4)},
         "spoof_state_reported": _share([r for r in ok if "spoof_state_reported" in r],
                                        lambda r: r["spoof_state_reported"]),
         "gnss_topic": {t: sum(1 for r in ok if r.get("gnss_topic") == t)
@@ -242,7 +263,6 @@ def measure_one(path):
 
 
 def main(argv=None):
-    import requests
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--out-dir", required=True)
     p.add_argument("--exclude", help="an earlier run's logs.jsonl: its logs and vehicles are left out")
@@ -257,6 +277,7 @@ def main(argv=None):
             rows = [json.loads(line) for line in f if line.strip()]
         _write(args.out_dir, rows, {"rescored_from": os.path.basename(args.rescore)})
         return 0
+    import requests
     os.makedirs(args.tmp, exist_ok=True)
     started = time.time()
     session = requests.Session()

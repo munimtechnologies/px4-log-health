@@ -1,0 +1,237 @@
+{
+ "attempted": 300,
+ "downloaded": 248,
+ "health_ok": 208,
+ "vehicles_ok": 208,
+ "shares": {
+  "vib_orange_or_red": 0.404,
+  "vib_red": 0.2172,
+  "clip_any": 0.2273,
+  "clip_any_loud": 0.3,
+  "clip_any_quiet": 0.178,
+  "jam_median_over_40": 0.2969,
+  "jam_p95_80_or_more": 0.1719,
+  "jam_state_warning_or_worse": 0.7013,
+  "spoof_indicated_or_worse": 0.0833,
+  "battery_low_or_worse": 0.1864,
+  "battery_critical_or_worse": 0.1299,
+  "failsafe": 0.2609,
+  "saturated": 0.0455,
+  "any_flag": 0.75
+ },
+ "n": {
+  "vib": 198,
+  "clip": 198,
+  "loud": 80,
+  "quiet": 118,
+  "jam": 128,
+  "jam_state": 77,
+  "spoof": 72,
+  "battery": 177,
+  "failsafe": 207,
+  "saturation": 110
+ },
+ "flags_per_log": {
+  "0": 52,
+  "1": 63,
+  "2": 52,
+  "3": 21,
+  "4": 16,
+  "5": 2
+ },
+ "replication": {
+  "passed": 98,
+  "vehicles_passed": 98,
+  "lag_ms": {
+   "median": 113.8,
+   "p10": 62.0,
+   "p25": 88.5,
+   "p75": 159.4,
+   "p90": 234.1,
+   "min": -15.8,
+   "max": 381.1
+  },
+  "median_se_ms": 1.1,
+  "param": {
+   "n": 93,
+   "share_default_110": 0.956989247311828,
+   "values": [
+    110.0,
+    120.0,
+    200.0,
+    220.0,
+    250.0
+   ]
+  },
+  "lag_minus_param_ms": {
+   "median": 0.7,
+   "share_abs_over_50": 0.3118279569892473
+  },
+  "by_bus": {
+   "i2c": {
+    "n": 1,
+    "median_lag_ms": 169.2
+   },
+   "serial": {
+    "n": 46,
+    "median_lag_ms": 129.2
+   },
+   "uavcan": {
+    "n": 18,
+    "median_lag_ms": 107.7
+   },
+   "unknown": {
+    "n": 33,
+    "median_lag_ms": 106.2
+   }
+  },
+  "not_passed_reasons": {
+   "IMU explains too little of the GPS velocity change": 53,
+   "download too large": 52,
+   "too few in-flight GPS pairs": 30,
+   "too little manoeuvring": 29,
+   "error: no vehicle_gps_position in the log": 35,
+   "error: no sensor_combined in the log": 1,
+   "best lag at the edge of the search": 2
+  }
+ },
+ "not_ok_reasons": {
+  "download too large": 52,
+  "under 60 s in the air": 36,
+  "no vehicle_land_detected": 4
+ },
+ "checks": {
+  "E1": true,
+  "P1": false,
+  "P2": false,
+  "P3": true,
+  "P4": true,
+  "P5": false,
+  "P6": false,
+  "P7": true,
+  "P8": true,
+  "P9": true,
+  "P10": true,
+  "R1": true,
+  "R2": true
+ },
+ "decision": {
+  "B1_publish_baseline": true,
+  "R_replicated": true,
+  "R_caution": false
+ },
+ "exploratory": {
+  "note": "not pre-registered; descriptive only",
+  "by_mav_type": {
+   "Fixed Wing": {
+    "n": 20,
+    "any_flag": 0.8,
+    "vib_orange_or_red": 0.2632
+   },
+   "Generic": {
+    "n": 1,
+    "any_flag": 1.0,
+    "vib_orange_or_red": 1.0
+   },
+   "Ground Rover": {
+    "n": 1,
+    "any_flag": 1.0,
+    "vib_orange_or_red": 0.0
+   },
+   "Hexarotor": {
+    "n": 28,
+    "any_flag": 0.7143,
+    "vib_orange_or_red": 0.4
+   },
+   "Normal helicopter with tail rotor": {
+    "n": 1,
+    "any_flag": 1.0,
+    "vib_orange_or_red": 0.0
+   },
+   "Octorotor": {
+    "n": 7,
+    "any_flag": 0.7143,
+    "vib_orange_or_red": 0.4286
+   },
+   "Quadrotor": {
+    "n": 119,
+    "any_flag": 0.7731,
+    "vib_orange_or_red": 0.4956
+   },
+   "Tiltrotor VTOL": {
+    "n": 5,
+    "any_flag": 0.8,
+    "vib_orange_or_red": 0.2
+   },
+   "Two-rotor VTOL (Tailsitter)": {
+    "n": 2,
+    "any_flag": 1.0,
+    "vib_orange_or_red": 0.0
+   },
+   "VTOL Standard": {
+    "n": 16,
+    "any_flag": 0.625,
+    "vib_orange_or_red": 0.25
+   },
+   "unknown type": {
+    "n": 8,
+    "any_flag": 0.5,
+    "vib_orange_or_red": 0.0
+   }
+  },
+  "by_multicopter": {
+   "False": {
+    "n": 44,
+    "any_flag": 0.7727,
+    "vib_orange_or_red": 0.25
+   },
+   "None": {
+    "n": 7,
+    "any_flag": 0.1429,
+    "vib_orange_or_red": null
+   },
+   "True": {
+    "n": 157,
+    "any_flag": 0.7707,
+    "vib_orange_or_red": 0.4481
+   }
+  },
+  "by_vib_units": {
+   "m/s": {
+    "n": 32,
+    "any_flag": 0.7188,
+    "vib_orange_or_red": 0.037
+   },
+   "m/s^2": {
+    "n": 138,
+    "any_flag": 0.8188,
+    "vib_orange_or_red": 0.5147
+   },
+   "unknown": {
+    "n": 38,
+    "any_flag": 0.5263,
+    "vib_orange_or_red": 0.2571
+   }
+  },
+  "vib_worst_imu_orange_or_red": 0.4242,
+  "jam_reported": 0.6957,
+  "jam_state_max": {
+   "0": 0,
+   "1": 23,
+   "2": 52,
+   "3": 2
+  },
+  "spoof_state_reported": 0.5625,
+  "gnss_topic": {
+   "vehicle_gps_position": 184,
+   "sensor_gps": 0,
+   "null": 24
+  }
+ },
+ "fleet_health": "0.2.0",
+ "health": "0.2.0",
+ "gps_lag": "0.1.0",
+ "fleet": "0.1.1",
+ "seed": 20261031,
+ "rescored_from": "health-logs.jsonl"
+}

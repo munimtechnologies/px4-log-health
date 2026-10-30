@@ -5,12 +5,16 @@ the air (vehicle_land_detected says not landed):
 
 - vibration: vehicle_imu_status.accel_vibration_metric of the first IMU,
   against the bands Flight Review draws on its vibration plot (green below
-  4.905 m/s^2, orange to 9.81, red above);
+  4.905 m/s^2, orange to 9.81, red above). PX4 v1.12 and older computed this
+  metric from delta velocities (m/s), about 200 times smaller, so the bands
+  are not applied to those logs;
 - accelerometer clipping: the increase of vehicle_imu_status.accel_clipping
   (PX4's running total per axis) while flying;
 - GNSS: the jamming indicator against the PX4 docs' limits ("should be around
   or below 40", "80 or higher [is] too high"), and the receiver's own jamming
-  and spoofing states where it reports them; satellites used and eph;
+  and spoofing states where it reports them; satellites used and eph. A
+  jamming state of 3 (critical) is flagged; 2 (u-blox: interference visible,
+  fix kept) is common on ordinary flights and is only noted;
 - battery: the highest battery_status.warning (1 low, 2 critical,
   3 emergency, 4 failed) of a battery that reads a voltage;
 - failsafe: whether vehicle_status.failsafe was ever set;
@@ -18,6 +22,9 @@ the air (vehicle_land_detected says not landed):
   motor of actuator_motors was commanded at 0.99 or more.
 
     python health.py flight.ulg [more.ulg ...]
+
+If baseline.json (fleet quantiles from studies/fleet-health-2026) sits next to
+this file, each figure is also placed against the fleet, e.g. "p75-p90".
 
 Uses no position, so no location leaves the log. These are the same limits a
 person reading Flight Review applies by eye; a flag is a reason to look, not a
@@ -29,16 +36,18 @@ By MV2 of Munim, Inc.; written with AI agents. Apache-2.0.
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 import numpy as np
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 VIB_ORANGE = 4.905      # m/s^2: Flight Review's vibration plot, green below
 VIB_RED = 9.81          # m/s^2: red above
 JAM_OK = 40             # PX4 docs: jamming indicator "should be around or below 40"
 JAM_HIGH = 80           # "Values around 80 or higher are too high"
+JAM_STATE_FLAG = 3      # critical; 2 is noted, not flagged (fleet-health-2026 GRADE)
 SAT_LEVEL = 0.99        # a motor command at or above this counts as saturated
 SAT_SHARE = 0.05        # flagged when that holds in 5% of in-flight samples
 MIN_FLIGHT_S = 60.0     # a log needs this much time in the air to be read
@@ -48,16 +57,46 @@ MIN_VOLTAGE = 1.0       # V: a battery reading less is not monitored
 TOPICS = ("vehicle_land_detected", "vehicle_imu_status", "vehicle_gps_position",
           "sensor_gps", "battery_status", "vehicle_status", "actuator_motors")
 STATE_NAMES = {0: "unknown", 1: "ok", 2: "warning", 3: "critical"}
+PLACED = ("flight_s", "vib_median", "vib_p95", "clip_per_min", "jam_median", "jam_p95",
+          "sats_median", "eph_median", "sat_share")
+BASELINE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "baseline.json")
+
+
+def release_name(value):
+    """'v1.14.3' from ULog's ver_sw_release integer (0xAABBCCTT), else None
+    (as px4-gps-lag's gps_lag.py names it)."""
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return None
+    if v <= 0:
+        return None
+    name = "v%d.%d.%d" % ((v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF)
+    kind = v & 0xFF
+    return name if kind == 255 else "%s-%d" % (name, kind)
+
+
+def vib_units(release):
+    """'m/s^2' for PX4 v1.13 and newer, 'm/s' for v1.12 and older (VehicleIMU
+    then took the metric from delta velocities), None when the release is
+    unknown or not a PX4 v1 number (forks, untagged builds)."""
+    try:
+        major, minor = (int(p) for p in str(release).lstrip("v").split("-")[0].split(".")[:2])
+    except (TypeError, ValueError):
+        return None
+    if major != 1:
+        return None
+    return "m/s^2" if minor >= 13 else "m/s"
 
 
 def read_health(path):
-    """{'topics': {name: {instance: {field: array}}}} from a ULog file."""
+    """{'topics': {name: {instance: {field: array}}}, 'release'} from a ULog file."""
     from pyulog import ULog
     ulog = ULog(path, list(TOPICS), True)
     topics = {}
     for d in ulog.data_list:
         topics.setdefault(d.name, {})[d.multi_id] = d.data
-    return {"topics": topics}
+    return {"topics": topics, "release": release_name(ulog.msg_info_dict.get("ver_sw_release"))}
 
 
 def _times(d):
@@ -90,7 +129,7 @@ def flight_seconds(land_t, landed, t_end):
 
 
 def vibration(imu, fly):
-    """Median and 95th percentile of the in-flight vibration metric (m/s^2)."""
+    """Median and 95th percentile of the in-flight vibration metric."""
     if "accel_vibration_metric" not in imu:
         return None
     v = np.asarray(imu["accel_vibration_metric"], dtype=float)[fly]
@@ -213,7 +252,7 @@ def measure_health(log):
     landed = np.asarray(land["landed"])
     t_end = max(float(_times(d)[-1]) for inst in topics.values() for d in inst.values()
                 if "timestamp" in d and len(d["timestamp"]))
-    out = {"flight_s": round(flight_seconds(land_t, landed, t_end), 1)}
+    out = {"flight_s": round(flight_seconds(land_t, landed, t_end), 1), "release": log.get("release")}
     if out["flight_s"] < MIN_FLIGHT_S:
         out.update({"health_ok": False, "health_reason": "under %d s in the air" % MIN_FLIGHT_S})
         return out
@@ -221,6 +260,7 @@ def measure_health(log):
     def fly(d):
         return flying_at(_times(d), land_t, landed)
 
+    units = vib_units(out["release"])
     imus = topics.get("vehicle_imu_status") or {}
     out["imu_count"] = len(imus)
     if 0 in imus:
@@ -230,7 +270,8 @@ def measure_health(log):
         if vib:
             out["vib_median"] = round(vib["median"], 3)
             out["vib_p95"] = round(vib["p95"], 3)
-            out["vib_band"] = vib_band(vib["median"])
+            out["vib_units"] = units or "m/s^2 (assumed: release unknown)"
+            out["vib_band"] = None if units == "m/s" else vib_band(vib["median"])
         clip = clipping(imu, f)
         if clip is not None:
             out["clip_count"] = clip
@@ -267,6 +308,7 @@ def measure_health(log):
             out["sat_share"] = round(sat[1], 4)
 
     out["flags"] = flags(out)
+    out["notes"] = notes(out)
     out["health_ok"] = True
     out["health_reason"] = "ok"
     return out
@@ -284,7 +326,7 @@ def flags(row):
         f.append("GPS jamming indicator median %.0f (PX4 docs: should be around or below 40)" % row["jam_median"])
     elif row.get("jam_p95") is not None and row["jam_p95"] >= JAM_HIGH:
         f.append("GPS jamming indicator reached %.0f (PX4 docs: 80 or higher is too high)" % row["jam_p95"])
-    if (row.get("jam_state_max") or 0) >= 2:
+    if (row.get("jam_state_max") or 0) >= JAM_STATE_FLAG:
         f.append("GPS receiver reported jamming (%s)" % STATE_NAMES.get(row["jam_state_max"], row["jam_state_max"]))
     if (row.get("spoof_state_max") or 0) >= 2:
         f.append("GPS receiver reported spoofing (state %d)" % row["spoof_state_max"])
@@ -297,16 +339,70 @@ def flags(row):
     return f
 
 
+def notes(row):
+    """Things worth knowing that are not flags."""
+    n = []
+    if row.get("vib_units") == "m/s":
+        n.append("vibration not banded: PX4 %s logs the metric in m/s (from delta velocities), "
+                 "so Flight Review's m/s^2 bands do not apply" % row.get("release"))
+    if row.get("jam_state_max") == 2:
+        n.append("GPS receiver reported interference (jamming state 2: visible, fix kept); "
+                 "common on ordinary flights (70% of public logs that report a state)")
+    return n
+
+
+def load_baseline(path=BASELINE):
+    """The fleet quantiles of studies/fleet-health-2026, or None."""
+    if not path or not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def place(value, q):
+    """Where value sits among the quantiles q ({'p10': .., ..., 'p99': ..}):
+    'below p10', 'p25-p50', 'above p99' and so on."""
+    if value is None or not q:
+        return None
+    cuts = [(k, q[k]) for k in ("p10", "p25", "p50", "p75", "p90", "p99") if q.get(k) is not None]
+    if not cuts:
+        return None
+    if value < cuts[0][1]:
+        return "below " + cuts[0][0]
+    for (lo, a), (hi, b) in zip(cuts, cuts[1:]):
+        if a <= value < b:
+            return "%s-%s" % (lo, hi)
+    return "above " + cuts[-1][0]
+
+
+def fleet_place(row, baseline):
+    """Each figure of a measured log against the fleet quantiles."""
+    if not baseline or not row.get("health_ok"):
+        return None
+    fields = baseline.get("fields") or {}
+    out = {}
+    for k in PLACED:
+        if k in ("vib_median", "vib_p95") and row.get("vib_units") == "m/s":
+            continue
+        p = place(row.get(k), fields.get(k))
+        if p:
+            out[k] = p
+    return out
+
+
 def main(argv=None):
     paths = sys.argv[1:] if argv is None else argv
     if not paths:
         print(__doc__)
         return 2
+    base = load_baseline()
     for path in paths:
         try:
             r = measure_health(read_health(path))
         except Exception as exc:  # report and go on to the next log
             r = {"health_ok": False, "health_reason": "error: %s" % exc}
+        if base:
+            r["fleet_place"] = fleet_place(r, base)
         r["log"] = path
         print(json.dumps(r))
     return 0
