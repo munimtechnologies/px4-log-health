@@ -1,5 +1,7 @@
 # px4-log-health
 
+**Try it in your browser:** [munimv2.github.io/px4-log-check](https://munimv2.github.io/px4-log-check/) runs this repo's `checkup.py` on your `.ulg` files on your own computer. Nothing from the log is uploaded.
+
 How healthy was a PX4 flight, by Flight Review's own limits, and how does it compare with other public flights? `health.py` reads one PX4 flight log (ULog) and reports, for the time the vehicle was in the air:
 
 - **vibration**: `vehicle_imu_status.accel_vibration_metric` against the bands Flight Review draws on its vibration plot (green below 4.905 m/s², orange to 9.81, red above). On logs from PX4 v1.12 or older the metric is in m/s, so no band is given (see below);
@@ -31,6 +33,12 @@ python checkup.py flight.ulg [more.ulg ...] --md report.md --json rows.jsonl [--
 Without `--md` the report goes to stdout. `--md` appends, so it can point at `$GITHUB_STEP_SUMMARY`. With `--fail-on-flag`, the exit code is 1 when any log raises a flag or gets a suggested `EKF2_GPS_DELAY`.
 
 Here is a real report on three public logs: [studies/fleet-health-2026/sample-report.md](studies/fleet-health-2026/sample-report.md).
+
+### In your browser
+
+[munimv2.github.io/px4-log-check](https://munimv2.github.io/px4-log-check/) runs `checkup.py` 0.3.1 in [Pyodide](https://pyodide.org/) (Python in WebAssembly), with numpy and pyulog. Pick one or more `.ulg` files and the report appears on the page. You can download it as Markdown and download the figures as JSON lines. The page fetches Pyodide and numpy from the jsDelivr CDN, pyulog from PyPI, and the checker's code from this repo's v0.3.1 tag and px4-gps-lag at a pinned commit. The log itself stays in the browser tab.
+
+**How it was checked.** A sealed run loaded the page's own `core.js` in Node with the same Pyodide build. It ran the three public logs of the sample report through it. The browser report was identical to the sample report `checkup.py` produced from the command line.
 
 ### As a GitHub Action
 
@@ -97,6 +105,6 @@ python -m unittest -v test_checkup test_health test_gps_lag
 
 ## Licence and credits
 
-Code: Apache-2.0. Text: CC BY 4.0. Results derived from PX4 Flight Review public logs (Dronecode / PX4, CC BY 4.0). Reads logs with [pyulog](https://github.com/PX4/pyulog) (BSD-3-Clause). Limits quoted from the PX4 docs and Flight Review.
+Code: Apache-2.0. Text: CC BY 4.0. Results derived from PX4 Flight Review public logs (Dronecode / PX4, CC BY 4.0). Reads logs with [pyulog](https://github.com/PX4/pyulog) (BSD-3-Clause). Limits quoted from the PX4 docs and Flight Review. The browser page uses [Pyodide](https://pyodide.org/) (MPL-2.0).
 
 By MV2 of Munim, Inc. (mv2@munimtech.com). The code and text were made with AI agents working in his name.
