@@ -24,7 +24,8 @@ the air (vehicle_land_detected says not landed):
     python health.py flight.ulg [more.ulg ...]
 
 If baseline.json (fleet quantiles from studies/fleet-health-2026) sits next to
-this file, each figure is also placed against the fleet, e.g. "p75-p90".
+this file, each figure is also placed against the fleet, e.g. "p75-p90", or
+"p10-p75 (tied)" when most flights share the value (zero clipping, say).
 
 Uses no position, so no location leaves the log. These are the same limits a
 person reading Flight Review applies by eye; a flag is a reason to look, not a
@@ -41,7 +42,7 @@ import sys
 
 import numpy as np
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 VIB_ORANGE = 4.905      # m/s^2: Flight Review's vibration plot, green below
 VIB_RED = 9.81          # m/s^2: red above
@@ -361,12 +362,17 @@ def load_baseline(path=BASELINE):
 
 def place(value, q):
     """Where value sits among the quantiles q ({'p10': .., ..., 'p99': ..}):
-    'below p10', 'p25-p50', 'above p99' and so on."""
+    'below p10', 'p25-p50', 'above p99' and so on. When two or more cuts
+    equal the value, most flights share it (zero clipping, say), and the
+    whole tied range is named: 'p10-p75 (tied)'."""
     if value is None or not q:
         return None
     cuts = [(k, q[k]) for k in ("p10", "p25", "p50", "p75", "p90", "p99") if q.get(k) is not None]
     if not cuts:
         return None
+    tied = [k for k, c in cuts if c == value]
+    if len(tied) >= 2:
+        return "%s-%s (tied)" % (tied[0], tied[-1])
     if value < cuts[0][1]:
         return "below " + cuts[0][0]
     for (lo, a), (hi, b) in zip(cuts, cuts[1:]):

@@ -171,6 +171,19 @@ class Place(unittest.TestCase):
         self.assertIsNone(health.place(None, self.Q))
         self.assertIsNone(health.place(1.0, None))
 
+    def test_tied_cuts_name_the_whole_range(self):
+        # clip_per_min in baseline.json: zero from p10 to p75
+        q = {"n": 198, "p10": 0.0, "p25": 0.0, "p50": 0.0, "p75": 0.0, "p90": 24.9, "p99": 2131.0}
+        self.assertEqual(health.place(0.0, q), "p10-p75 (tied)")
+        self.assertEqual(health.place(0, q), "p10-p75 (tied)")
+        self.assertEqual(health.place(3.0, q), "p75-p90")
+        self.assertEqual(health.place(24.9, q), "p90-p99")
+        self.assertEqual(health.place(3000.0, q), "above p99")
+        q2 = dict(self.Q, p25=3.0)                      # p25 = p50 = 3
+        self.assertEqual(health.place(3.0, q2), "p25-p50 (tied)")
+        self.assertEqual(health.place(2.0, q2), "p10-p25")
+        self.assertEqual(health.place(1.0, self.Q), "p10-p25")   # one equal cut is not a tie
+
     def test_fleet_place(self):
         base = {"fields": {"vib_median": self.Q, "flight_s": self.Q}}
         r = health.measure_health(synthetic(release="v1.14.3"))
@@ -179,6 +192,9 @@ class Place(unittest.TestCase):
         self.assertNotIn("vib_median", health.fleet_place(old, base))
         self.assertIsNone(health.fleet_place({"health_ok": False}, base))
         self.assertIsNone(health.fleet_place(r, None))
+        tied = {"fields": {"sat_share": {"p10": 0.0, "p25": 0.0, "p50": 0.0, "p75": 0.0, "p90": 0.0101}}}
+        quiet = health.measure_health(synthetic(sat_window=None))
+        self.assertEqual(health.fleet_place(quiet, tied), {"sat_share": "p10-p75 (tied)"})
 
 
 def row(i, vib=2.0, clip=0, jam=10.0, batt=0, fs=False, sat=0.0, lag=None, vehicle=True, release="v1.14.3"):

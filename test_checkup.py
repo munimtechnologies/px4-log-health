@@ -44,6 +44,12 @@ class Verdict(unittest.TestCase):
             self.assertEqual(v["status"], "ok", d)
             self.assertIsNone(v["suggest_ms"])
 
+    def test_near_the_line(self):
+        for d, near in ((-50.0, True), (-40.0, True), (-39.9, False), (0.0, False), (49.7, True)):
+            self.assertEqual(checkup.gps_verdict(lag(d), inn(5.0))["near_line"], near, d)
+        self.assertFalse(checkup.gps_verdict(lag(64.6), inn(31.0))["near_line"])
+        self.assertFalse(checkup.gps_verdict(lag(0.0, lag_ms=155.0, param=None), None)["near_line"])
+
     def test_off_and_agreeing_suggests_the_measured_lag(self):
         v = checkup.gps_verdict(lag(64.6), inn(31.0))
         self.assertEqual((v["status"], v["innov"], v["suggest_ms"]), ("off", "agrees", 175))
@@ -89,7 +95,26 @@ class Render(unittest.TestCase):
         self.assertIn("| Failsafe in flight | no |  |", md)
         self.assertIn("| A motor at full command | 1.2% of flight |", md)
         self.assertIn("Within 50 ms of the setting: nothing to change.", md)
+        self.assertIn("this vehicle's EKF2_GPS_DELAY is 110 ms (+10 ms).", md)
         self.assertNotIn("Suggestion", md)
+        self.assertNotIn("*(tied)*", md)
+
+    def test_tied_place_is_explained(self):
+        md = checkup.render(report(lag_row=lag(0.0), place={"clip_per_min": "p10-p75 (tied)",
+                                                             "vib_median": "p75-p90"}))
+        self.assertIn("| Accelerometer clipping | 3 events (0.43 per min) | p10-p75 (tied) |", md)
+        self.assertIn("*(tied)*: many public flights have exactly this value", md)
+        self.assertLess(md.index("*(tied)*"), md.index("### GPS delay"))
+
+    def test_close_to_the_line_says_so_with_one_decimal(self):
+        md = checkup.render(report(lag_row=lag(49.7), inn_row=inn(23.0)))
+        self.assertIn("The GPS lags the IMU by **159.7 ms** (± 1.2); this vehicle's EKF2_GPS_DELAY is "
+                      "110 ms (+49.7 ms).", md)
+        self.assertIn("close to the 50 ms line (+49.7 ms): no change suggested; measure another flight", md)
+        self.assertNotIn("nothing to change", md)
+        self.assertNotIn("Suggestion", md)
+        md = checkup.render(report(lag_row=lag(-42.0), inn_row=inn(-9.0)))
+        self.assertIn("(-42.0 ms): no change suggested", md)
 
     def test_no_flags(self):
         h = dict(HEALTH, flags=[], notes=[])
@@ -163,12 +188,15 @@ class Main(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["gps"]["lag"]["bias_ne_m_s2"], [0.01, -0.02])
         self.assertEqual(rows[0]["gps_verdict"]["status"], "ok")
+        self.assertFalse(rows[0]["gps_verdict"]["near_line"])
 
     def test_fail_on_flag(self):
         quiet = dict(HEALTH, flags=[], notes=[])
         ok = {"lag": lag(5.0), "innov": inn(2.0)}
+        near = {"lag": lag(45.0), "innov": inn(20.0)}
         off = {"lag": lag(80.0), "innov": inn(20.0)}
         self.assertEqual(self.run_main([quiet, quiet], [ok, ok], "--fail-on-flag")[0], 0)
+        self.assertEqual(self.run_main([quiet, quiet], [ok, near], "--fail-on-flag")[0], 0)
         self.assertEqual(self.run_main([quiet, HEALTH], [ok, ok], "--fail-on-flag")[0], 1)
         self.assertEqual(self.run_main([quiet, quiet], [ok, off], "--fail-on-flag")[0], 1)
         self.assertEqual(self.run_main([quiet, HEALTH], [ok, off])[0], 0)

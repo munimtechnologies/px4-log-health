@@ -28,9 +28,10 @@ import sys
 
 import health
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 OFF_MS = 50.0           # px4-gps-lag rule D1: suggest only when the lag is this far off EKF2_GPS_DELAY
+NEAR_MS = 40.0          # within OFF_MS but this close to it: say so, with one decimal
 BATTERY = {0: "none", 1: "low", 2: "critical", 3: "emergency", 4: "failed"}
 FLEET = "208 public PX4 flights (fleet-health-2026)"
 
@@ -67,11 +68,12 @@ def gps_verdict(lag, inn):
     status: 'not measured', 'no setting' (EKF2_GPS_DELAY not in the log), 'ok'
     (within 50 ms) or 'off'. innov: 'agrees', 'disagrees' or 'not checked'.
     suggest_ms is set only when the lag is off and EKF2's innovation does not
-    lean the other way."""
+    lean the other way. near_line: ok, but 40 ms or more off the setting."""
     if not lag or not lag.get("passed"):
         return {"status": "not measured", "reason": (lag or {}).get("reason", "not run")}
     out = {"lag_ms": lag["lag_ms"], "se_ms": lag.get("se_ms"), "param_ms": lag.get("param_gps_delay_ms"),
-           "d_ms": lag.get("lag_minus_param_ms"), "innov": "not checked", "suggest_ms": None}
+           "d_ms": lag.get("lag_minus_param_ms"), "innov": "not checked", "suggest_ms": None,
+           "near_line": False}
     if inn and inn.get("passed") and out["d_ms"]:
         x = inn["implied_excess_ms"]
         out["implied_ms"] = x
@@ -80,6 +82,7 @@ def gps_verdict(lag, inn):
         out["status"] = "no setting"
     elif abs(out["d_ms"]) <= OFF_MS:
         out["status"] = "ok"
+        out["near_line"] = abs(out["d_ms"]) >= NEAR_MS
     else:
         out["status"] = "off"
         if out["innov"] != "disagrees":
@@ -104,8 +107,8 @@ def _num(x, spec="%.1f"):
     return "n/a" if x is None else spec % x
 
 
-def _signed(x):
-    return "%+.0f" % x
+def _signed(x, spec="%+.0f"):
+    return spec % x
 
 
 def render(r):
@@ -128,8 +131,11 @@ def render(r):
         if h.get("notes"):
             lines += ["Notes:", ""] + ["- %s" % n for n in h["notes"]] + [""]
         lines += ["| Figure | This flight | Among %s |" % FLEET, "|---|---|---|"]
+        shown = []
 
         def row(name, value, key=None):
+            if key:
+                shown.append(place.get(key, ""))
             lines.append("| %s | %s | %s |" % (name, value, place.get(key, "") if key else ""))
 
         if h.get("vib_median") is not None:
@@ -157,6 +163,9 @@ def render(r):
         if h.get("sat_share") is not None:
             row("A motor at full command", "%.1f%% of flight" % (100 * h["sat_share"]), "sat_share")
         lines.append("")
+        if any("(tied)" in p for p in shown):
+            lines += ["*(tied)*: many public flights have exactly this value (for clipping and motor "
+                      "saturation, usually zero), so this flight sits with them.", ""]
     lines += ["### GPS delay", ""]
     g = r.get("gps") or {}
     if g.get("skipped"):
@@ -165,11 +174,14 @@ def render(r):
         lines += ["Not measured: %s. The lag needs a flight with some manoeuvring; hover-only flights "
                   "usually can't be measured." % v["reason"], ""]
     else:
-        text = "The GPS lags the IMU by **%.0f ms** (± %s)" % (v["lag_ms"], _num(v["se_ms"]))
+        near = v.get("near_line")
+        text = "The GPS lags the IMU by **%s ms** (± %s)" % (_num(v["lag_ms"], "%.1f" if near else "%.0f"),
+                                                            _num(v["se_ms"]))
         if v["status"] == "no setting":
             text += ". The log has no EKF2_GPS_DELAY to compare with."
         else:
-            text += "; this vehicle's EKF2_GPS_DELAY is %.0f ms (%s ms)." % (v["param_ms"], _signed(v["d_ms"]))
+            text += "; this vehicle's EKF2_GPS_DELAY is %.0f ms (%s ms)." % (
+                v["param_ms"], _signed(v["d_ms"], "%+.1f" if near else "%+.0f"))
         lines += [text, ""]
         if v["innov"] == "agrees":
             lines += ["EKF2's own GPS velocity innovations lean the same way (implied %s ms)." % _signed(v["implied_ms"]), ""]
@@ -179,7 +191,11 @@ def render(r):
         else:
             reason = ((g.get("innov") or {}).get("reason")) or "not run"
             lines += ["EKF2's innovations could not be checked (%s)." % reason, ""]
-        if v["status"] == "ok":
+        if v["status"] == "ok" and near:
+            lines += ["Within %.0f ms of the setting, but close to the %.0f ms line (%s ms): no change "
+                      "suggested; measure another flight to see which side it falls on."
+                      % (OFF_MS, OFF_MS, _signed(v["d_ms"], "%+.1f")), ""]
+        elif v["status"] == "ok":
             lines += ["Within %.0f ms of the setting: nothing to change." % OFF_MS, ""]
         elif v["status"] == "off" and v["suggest_ms"] is not None:
             lines += ["**Suggestion:** try EKF2_GPS_DELAY = %d as a starting value. Measure two or three "

@@ -16,9 +16,9 @@ python health.py flight.ulg
 
 It prints one JSON line per log with each figure, the PX4 release, a list of plain-language `flags` and a list of `notes`. It reads no position, so no location leaves the log. A flag is a reason to look at the log in Flight Review, not a diagnosis.
 
-**Fleet place (new in 0.2.0).** With `baseline.json` next to `health.py` (it is in this repo), each figure is also placed against 208 public flights, e.g. `"vib_median": "p75-p90"` or `"above p99"`. Vibration is placed only against logs from PX4 v1.13 or newer.
+**Fleet place.** With `baseline.json` next to `health.py` (it is in this repo), each figure is also placed against 208 public flights, e.g. `"vib_median": "p75-p90"` or `"above p99"`. When most flights share the value, the whole tied range is named, e.g. `"clip_per_min": "p10-p75 (tied)"` for a flight with no clipping (new in 0.3.1). Vibration is placed only against logs from PX4 v1.13 or newer.
 
-## One report per flight (new in 0.3.0)
+## One report per flight
 
 `checkup.py` turns each log into a short Markdown report: the flags, a table of every figure with its place among 208 public flights, and a **GPS delay** verdict. The verdict measures how far the GPS lags the IMU with [px4-gps-lag](https://github.com/munimtechnologies/px4-gps-lag), compares that with the log's `EKF2_GPS_DELAY`, and checks the direction against EKF2's own GPS velocity innovations. It suggests a new `EKF2_GPS_DELAY` only when the measured lag is more than 50 ms off the setting and the innovations don't point the other way. That is the rule px4-gps-lag's fleet studies support ([GRADE-innov-confirm.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/fleet-2026/GRADE-innov-confirm.md)). A suggested value is a starting point to check with EKF2 log replay, not a setting to fly.
 
@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/px4-log-health@v0.3.0
+      - uses: munimtechnologies/px4-log-health@v0.3.1
         with:
           logs: "**/*.ulg"          # space-separated globs
           fail-on-flag: "false"     # "true" fails the step on any flag or suggestion
@@ -52,9 +52,14 @@ jobs:
 
 The Action installs numpy and pyulog, fetches `gps_lag.py` and `innov.py` from px4-gps-lag at a pinned commit (input `gps-lag-ref`), and writes one JSON line per log to `px4-log-health.jsonl` (input `json`).
 
-**How it was checked.** A sealed run went through the unit tests (checkup, health and px4-gps-lag's tests). It then ran `checkup.py` and the Action's script, from a bare folder, on three real public logs: one more than 50 ms off its setting, one within 20 ms, and one from PX4 v1.12 or older. Every health figure, lag and implied innovation excess matched the figures the studies had recorded.
+**How it was checked.** A sealed run went through the unit tests (checkup, health and px4-gps-lag's tests). It then ran `checkup.py` and the Action's script, from a bare folder, on three real public logs: one more than 50 ms off its setting, one within 20 ms, and one from PX4 v1.12 or older. Every health figure, lag and implied innovation excess matched the figures the studies had recorded. 0.3.1 was checked the same way.
 
-**Known in 0.3.0.** When most public flights share one value (no clipping, for example), the fleet column shows the highest band that value reaches, e.g. "p75-p90" for zero clipping events. Read it as "like most flights". 0.3.1 will name the whole tied range instead.
+## What changed in 0.3.1
+
+Two wording fixes; every figure is measured exactly as in 0.3.0.
+
+- **Tied fleet places.** When several fleet quantiles equal the flight's value (zero clipping or zero motor saturation, which most public flights share), the fleet column now names the whole tied range, e.g. "p10-p75 (tied)", with a one-line explanation under the table. 0.3.0 showed the highest band the value reached ("p75-p90"), which read as if the flight clipped more than most.
+- **Close to the 50 ms line.** When the GPS lag is within 50 ms of `EKF2_GPS_DELAY` but 40 ms or more off, the report shows the lag and the difference to one decimal and says it is close to the line: no change is suggested, and another flight will show which side it falls on. 0.3.0 printed "+50 ms" and "within 50 ms" for a difference of +49.7 ms. The JSON verdict has a new `near_line` field.
 
 ## What changed in 0.2.0
 
