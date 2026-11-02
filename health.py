@@ -14,7 +14,10 @@ the air (vehicle_land_detected says not landed):
   or below 40", "80 or higher [is] too high"), and the receiver's own jamming
   and spoofing states where it reports them; satellites used and eph. A
   jamming state of 3 (critical) is flagged; 2 (u-blox: interference visible,
-  fix kept) is common on ordinary flights and is only noted;
+  fix kept) is common on ordinary flights and is only noted. Read from
+  vehicle_gps_position, or from vehicle_gnss on PX4 main since 2026-09-29
+  (PX4 PR #24399 renamed the GPS topics; the selected receiver's sample sits
+  in vehicle_gnss as 'receiver');
 - battery: the highest battery_status.warning (1 low, 2 critical,
   3 emergency, 4 failed) of a battery that reads a voltage;
 - failsafe: whether vehicle_status.failsafe was ever set;
@@ -42,7 +45,7 @@ import sys
 
 import numpy as np
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 VIB_ORANGE = 4.905      # m/s^2: Flight Review's vibration plot, green below
 VIB_RED = 9.81          # m/s^2: red above
@@ -56,7 +59,9 @@ MIN_SAMPLES = 10        # in-flight samples a topic needs for its figure
 MIN_VOLTAGE = 1.0       # V: a battery reading less is not monitored
 
 TOPICS = ("vehicle_land_detected", "vehicle_imu_status", "vehicle_gps_position",
-          "sensor_gps", "battery_status", "vehicle_status", "actuator_motors")
+          "sensor_gps", "vehicle_gnss", "sensor_gnss", "battery_status", "vehicle_status",
+          "actuator_motors")
+GNSS_TOPICS = ("vehicle_gps_position", "vehicle_gnss", "sensor_gps", "sensor_gnss")
 STATE_NAMES = {0: "unknown", 1: "ok", 2: "warning", 3: "critical"}
 PLACED = ("flight_s", "vib_median", "vib_p95", "clip_per_min", "jam_median", "jam_p95",
           "sats_median", "eph_median", "sat_share")
@@ -160,6 +165,21 @@ def clipping(imu, fly):
     both = fly[1:] & fly[:-1]
     d = np.where(d > 0, d, 0.0)
     return int(np.sum(d[both]))
+
+
+def gnss_view(name, d):
+    """The fields of one GNSS topic under their sensor_gps / sensor_gnss names.
+
+    vehicle_gnss (PX4 main since 2026-09-29, PR #24399) nests the selected
+    receiver's sample as 'receiver', which pyulog names 'receiver.<field>'.
+    The jamming, spoofing, satellite and eph fields keep their names there.
+    The outer timestamp (the sensors module's publish time) is kept for the
+    in-flight test. Other topics are returned unchanged."""
+    if name != "vehicle_gnss" or d is None:
+        return d
+    out = {k[len("receiver."):]: v for k, v in d.items() if k.startswith("receiver.")}
+    out["timestamp"] = d["timestamp"]
+    return out
 
 
 def gnss(g, fly):
@@ -282,8 +302,9 @@ def measure_health(log):
     if worst:
         out["vib_median_worst_imu"] = round(max(worst), 3)
 
-    gname, g = _first(topics, "vehicle_gps_position", "sensor_gps")
+    gname, g = _first(topics, *GNSS_TOPICS)
     if g is not None:
+        g = gnss_view(gname, g)
         out["gnss_topic"] = gname
         out.update(gnss(g, fly(g)))
 

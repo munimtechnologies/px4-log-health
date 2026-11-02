@@ -59,6 +59,21 @@ def synthetic(vib_air=2.0, jam_air=50, spoof_at=50, sat_window=(200, 390), volta
     }, "release": release}
 
 
+def as_vehicle_gnss(log):
+    """The same log as PX4 main writes it since PR #24399 (2026-09-29): no
+    vehicle_gps_position; vehicle_gnss nests the receiver's sample, which
+    pyulog names 'receiver.<field>'. The outer timestamp is the sensors
+    module's publish time, a little after the driver's."""
+    g = log["topics"].pop("vehicle_gps_position")[0]
+    nested = {"timestamp": g["timestamp"] + 300,
+              "timestamp_sample": g["timestamp"] - 110000,
+              "selection_count": np.zeros(len(g["timestamp"]), dtype=np.uint8)}
+    for k, v in g.items():
+        nested["receiver." + k] = v
+    log["topics"]["vehicle_gnss"] = {0: nested}
+    return log
+
+
 class Health(unittest.TestCase):
     def test_flight_seconds(self):
         self.assertAlmostEqual(health.flight_seconds([0, 10, 200], [1, 0, 1], 210), 190.0)
@@ -88,6 +103,29 @@ class Health(unittest.TestCase):
         self.assertEqual(r["notes"], [])
         json.dumps(r)
 
+    def test_vehicle_gnss_from_px4_main(self):
+        old = health.measure_health(synthetic())
+        new = health.measure_health(as_vehicle_gnss(synthetic()))
+        self.assertEqual(old["gnss_topic"], "vehicle_gps_position")
+        self.assertEqual(new["gnss_topic"], "vehicle_gnss")
+        for key in ("jam_reported", "jam_median", "jam_p95", "jam_state_max", "spoof_state_max",
+                    "sats_median", "eph_median", "flags", "notes"):
+            self.assertEqual(new[key], old[key], key)
+        self.assertAlmostEqual(new["eph_median"], 0.8)
+        self.assertIn("jamming indicator median 50", " ".join(new["flags"]))
+        json.dumps(new)
+
+    def test_gnss_view(self):
+        d = {"timestamp": np.array([5]), "receiver.timestamp": np.array([4]),
+             "receiver.eph": np.array([0.7]), "timestamp_sample": np.array([1]), "usable": np.array([True])}
+        v = health.gnss_view("vehicle_gnss", d)
+        self.assertEqual(sorted(v), ["eph", "timestamp"])
+        self.assertEqual(int(v["timestamp"][0]), 5)
+        self.assertIs(health.gnss_view("vehicle_gps_position", d), d)
+        self.assertIsNone(health.gnss_view("vehicle_gnss", None))
+        self.assertIn("vehicle_gnss", health.TOPICS)
+        self.assertIn("sensor_gnss", health.TOPICS)
+
     def test_vibration_bands(self):
         self.assertEqual(health.vib_band(4.9), "green")
         self.assertEqual(health.vib_band(6.0), "orange")
@@ -106,6 +144,7 @@ class Health(unittest.TestCase):
         self.assertEqual(health.vib_units("v1.11.3-0"), "m/s")
         self.assertEqual(health.vib_units("v1.13.0-0"), "m/s^2")
         self.assertEqual(health.vib_units("v1.16.0-128"), "m/s^2")
+        self.assertEqual(health.vib_units("v1.18.0-192"), "m/s^2")
         for unknown in (None, "v0.0.0", "v5.10.0", "v1", "custom"):
             self.assertIsNone(health.vib_units(unknown), unknown)
 

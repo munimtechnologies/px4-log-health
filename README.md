@@ -6,7 +6,7 @@ How healthy was a PX4 flight, by Flight Review's own limits, and how does it com
 
 - **vibration**: `vehicle_imu_status.accel_vibration_metric` against the bands Flight Review draws on its vibration plot (green below 4.905 m/s², orange to 9.81, red above). On logs from PX4 v1.12 or older the metric is in m/s, so no band is given (see below);
 - **accelerometer clipping**: how much PX4's running clipping totals grew while flying;
-- **GNSS**: the jamming indicator against the PX4 docs' limits ("should be around or below 40", "80 or higher" too high), the receiver's own jamming and spoofing states where it reports them, satellites used and eph;
+- **GNSS**: the jamming indicator against the PX4 docs' limits ("should be around or below 40", "80 or higher" too high), the receiver's own jamming and spoofing states where it reports them, satellites used and eph. Read from `vehicle_gps_position`, or from `vehicle_gnss` on PX4 main (new in 0.3.2);
 - **battery**: the highest battery warning (low, critical, emergency, failed) of a monitored battery;
 - **failsafe**: whether the vehicle entered failsafe;
 - **motor saturation** (multicopters): the share of the flight in which any motor was commanded at 0.99 or more.
@@ -18,11 +18,13 @@ python health.py flight.ulg
 
 It prints one JSON line per log with each figure, the PX4 release, a list of plain-language `flags` and a list of `notes`. It reads no position, so no location leaves the log. A flag is a reason to look at the log in Flight Review, not a diagnosis.
 
-**Fleet place.** With `baseline.json` next to `health.py` (it is in this repo), each figure is also placed against 208 public flights, e.g. `"vib_median": "p75-p90"` or `"above p99"`. When most flights share the value, the whole tied range is named, e.g. `"clip_per_min": "p10-p75 (tied)"` for a flight with no clipping (new in 0.3.1). Vibration is placed only against logs from PX4 v1.13 or newer.
+**Fleet place.** With `baseline.json` next to `health.py` (it is in this repo), each figure is also placed against 208 public flights, e.g. `"vib_median": "p75-p90"` or `"above p99"`. When most flights share the value, the whole tied range is named, e.g. `"clip_per_min": "p10-p75 (tied)"` for a flight with no clipping. Vibration is placed only against logs from PX4 v1.13 or newer.
 
 ## One report per flight
 
-`checkup.py` turns each log into a short Markdown report: the flags, a table of every figure with its place among 208 public flights, and a **GPS delay** verdict. The verdict measures how far the GPS lags the IMU with [px4-gps-lag](https://github.com/munimtechnologies/px4-gps-lag), compares that with the log's `EKF2_GPS_DELAY`, and checks the direction against EKF2's own GPS velocity innovations. It suggests a new `EKF2_GPS_DELAY` only when the measured lag is more than 50 ms off the setting and the innovations don't point the other way. That is the rule px4-gps-lag's fleet studies support ([GRADE-innov-confirm.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/fleet-2026/GRADE-innov-confirm.md)). A suggested value is a starting point to check with EKF2 log replay, not a setting to fly.
+`checkup.py` turns each log into a short Markdown report: the flags, a table of every figure with its place among 208 public flights, and a **GPS delay** verdict. The verdict measures how far the GPS lags the IMU with [px4-gps-lag](https://github.com/munimtechnologies/px4-gps-lag), compares that with the delay EKF2 assumed, and checks the direction against EKF2's own GPS velocity innovations. It suggests a new delay only when the measured lag is more than 50 ms off and the innovations don't point the other way. That is the rule px4-gps-lag's fleet studies support ([GRADE-innov-confirm.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/fleet-2026/GRADE-innov-confirm.md)). A suggested value is a starting point to check with EKF2 log replay, not a setting to fly.
+
+The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change.
 
 ```
 pip install numpy pyulog requests
@@ -30,13 +32,13 @@ python fetch_deps.py                 # gps_lag.py and innov.py from px4-gps-lag,
 python checkup.py flight.ulg [more.ulg ...] --md report.md --json rows.jsonl [--fail-on-flag]
 ```
 
-Without `--md` the report goes to stdout. `--md` appends, so it can point at `$GITHUB_STEP_SUMMARY`. With `--fail-on-flag`, the exit code is 1 when any log raises a flag or gets a suggested `EKF2_GPS_DELAY`.
+Without `--md` the report goes to stdout. `--md` appends, so it can point at `$GITHUB_STEP_SUMMARY`. With `--fail-on-flag`, the exit code is 1 when any log raises a flag or gets a suggested GPS delay.
 
 Here is a real report on three public logs: [studies/fleet-health-2026/sample-report.md](studies/fleet-health-2026/sample-report.md).
 
 ### In your browser
 
-[munimv2.github.io/px4-log-check](https://munimv2.github.io/px4-log-check/) runs `checkup.py` 0.3.1 in [Pyodide](https://pyodide.org/) (Python in WebAssembly), with numpy and pyulog. Pick one or more `.ulg` files and the report appears on the page. You can download it as Markdown and download the figures as JSON lines. The page fetches Pyodide and numpy from the jsDelivr CDN, pyulog from PyPI, and the checker's code from this repo's v0.3.1 tag and px4-gps-lag at a pinned commit. The log itself stays in the browser tab.
+[munimv2.github.io/px4-log-check](https://munimv2.github.io/px4-log-check/) runs `checkup.py` in [Pyodide](https://pyodide.org/) (Python in WebAssembly), with numpy and pyulog. For now it runs 0.3.1, from this repo's v0.3.1 tag. Pick one or more `.ulg` files and the report appears on the page. You can download it as Markdown and download the figures as JSON lines. The page fetches Pyodide and numpy from the jsDelivr CDN, pyulog from PyPI, and the checker's code from this repo's tag and px4-gps-lag at a pinned commit. The log itself stays in the browser tab.
 
 **How it was checked.** A sealed run loaded the page's own `core.js` in Node with the same Pyodide build. It ran the three public logs of the sample report through it. The browser report was identical to the sample report `checkup.py` produced from the command line.
 
@@ -52,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/px4-log-health@v0.3.1
+      - uses: munimtechnologies/px4-log-health@v0.3.2
         with:
           logs: "**/*.ulg"          # space-separated globs
           fail-on-flag: "false"     # "true" fails the step on any flag or suggestion
@@ -60,7 +62,20 @@ jobs:
 
 The Action installs numpy and pyulog, fetches `gps_lag.py` and `innov.py` from px4-gps-lag at a pinned commit (input `gps-lag-ref`), and writes one JSON line per log to `px4-log-health.jsonl` (input `json`).
 
-**How it was checked.** A sealed run went through the unit tests (checkup, health and px4-gps-lag's tests). It then ran `checkup.py` and the Action's script, from a bare folder, on three real public logs: one more than 50 ms off its setting, one within 20 ms, and one from PX4 v1.12 or older. Every health figure, lag and implied innovation excess matched the figures the studies had recorded. 0.3.1 was checked the same way.
+**How it was checked.** A sealed run went through the unit tests (checkup, health and px4-gps-lag's tests). It then ran `checkup.py` and the Action's script, from a bare folder, on three real public logs: one more than 50 ms off its setting, one within 20 ms, and one from PX4 v1.12 or older. Every health figure, lag and implied innovation excess matched the figures the studies had recorded. That run was for 0.3.1; 0.3.2 was checked as described below.
+
+## What changed in 0.3.2: PX4 v1.18 and PX4 main logs
+
+PX4 changed how it stores the GPS delay and what it calls the GPS topics. On logs from the new firmware 0.3.1 still ran, but it said the log had no delay setting and never suggested one.
+
+- **PX4 v1.18: a delay per receiver.** [PX4 PR #26660](https://github.com/PX4/PX4-Autopilot/pull/26660) (on main since March 2026, in v1.18.0-rc1) removed `EKF2_GPS_DELAY`. The sensors module now sets each sample's `timestamp_sample` to its arrival time minus `SENS_GPS0_DELAY` or `SENS_GPS1_DELAY`. It matches the slot to the receiver through `SENS_GPS0_ID` / `SENS_GPS1_ID`, by order when no id is set, and uses 110 ms when ids are set but none matches. A PPS correction takes priority. EKF2 then fuses the sample at `timestamp_sample`. checkup 0.3.2 reads the delay EKF2 actually applied from the log itself (arrival time minus `timestamp_sample`) and names the parameter behind it:
+  - "this vehicle's SENS_GPS0_DELAY is 110 ms ..." and **try SENS_GPS0_DELAY = N** when the lag is more than 50 ms off;
+  - when the receiver matches no `SENS_GPSn_ID`, it says PX4 used its 110 ms default and suggests setting `SENS_GPS0_ID` to the receiver's device id along with the delay;
+  - when PPS or the GPS driver set the sample times, it says so and suggests no parameter.
+  Logs with `EKF2_GPS_DELAY` (v1.17 and older) are handled exactly as before.
+- **PX4 main: GPS becomes GNSS.** [PX4 PR #24399](https://github.com/PX4/PX4-Autopilot/pull/24399) (main since 29 September 2026) renamed `vehicle_gps_position` to `vehicle_gnss`, with the receiver's sample nested as `receiver`, and `SENS_GPSn_*` to `SENS_GNSSn_*`. health 0.2.2 reads the jamming, spoofing, satellite and eph figures from `vehicle_gnss`, and checkup reads `SENS_GNSS0_DELAY`. px4-gps-lag's `gps_lag.py` doesn't read `vehicle_gnss` yet. On those logs the report says so instead of showing a bare error.
+
+**How it was checked.** A sealed run passed all 81 unit tests, old and new: synthetic v1.18 and PX4 main sample times and parameters, id matching (including ids above 2^31, which PX4 stores as negative int32), PPS timing, and a `vehicle_gnss` copy of the synthetic flight giving the same health figures as the `vehicle_gps_position` original. The same run read two real ULog files from pyulog's test folder through the new code and the whole checkup without an error. Those files have no GPS topic, so that only shows the new read path works with the real pyulog. Separately, px4-gps-lag's fresh-2026 sample found 8 public logs from PX4 v1.18 pre-releases: none has `EKF2_GPS_DELAY`, and in every one the arrival time minus `timestamp_sample` is 110.0 ms, the value checkup 0.3.2 reads ([GRADE-fresh.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/receiver-2026/GRADE-fresh.md)). A sealed run of the whole checkup on three of those logs is next. No public log in that sample used `vehicle_gnss`, so the `receiver.` field names it reads there come from pyulog's naming of nested fields and are not yet seen on a real log.
 
 ## What changed in 0.3.1
 
@@ -105,6 +120,6 @@ python -m unittest -v test_checkup test_health test_gps_lag
 
 ## Licence and credits
 
-Code: Apache-2.0. Text: CC BY 4.0. Results derived from PX4 Flight Review public logs (Dronecode / PX4, CC BY 4.0). Reads logs with [pyulog](https://github.com/PX4/pyulog) (BSD-3-Clause). Limits quoted from the PX4 docs and Flight Review. The browser page uses [Pyodide](https://pyodide.org/) (MPL-2.0).
+Code: Apache-2.0. Text: CC BY 4.0. Results derived from PX4 Flight Review public logs (Dronecode / PX4, CC BY 4.0). Reads logs with [pyulog](https://github.com/PX4/pyulog) (BSD-3-Clause). Limits quoted from the PX4 docs and Flight Review. The browser page uses [Pyodide](https://pyodide.org/) (MPL-2.0). Parameter and topic names quoted from PX4-Autopilot (BSD-3-Clause).
 
 By MV2 of Munim, Inc. (mv2@munimtech.com). The code and text were made with AI agents working in his name.
