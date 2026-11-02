@@ -5,7 +5,9 @@ flights (baseline.json). When px4-gps-lag's gps_lag.py and innov.py sit next
 to this file (fetch_deps.py or the GitHub Action puts them there), it also
 measures how far the GPS lags the IMU, compares that with the delay EKF2
 assumed, and checks the direction against EKF2's own GPS velocity
-innovations (px4-gps-lag, studies/fleet-2026/GRADE-innov-confirm.md).
+innovations (px4-gps-lag, studies/fleet-2026/GRADE-innov-confirm.md). When
+the lag is more than 50 ms off, it says what px4-gps-lag's mismatch-2026
+study saw on public logs that far off (studies/mismatch-2026/GRADE.md).
 
 The delay EKF2 assumed is the log's EKF2_GPS_DELAY up to PX4 v1.17. PX4 PR
 #26660 (on main since 2026-03-18, in v1.18) removed that parameter: the
@@ -37,7 +39,7 @@ import sys
 
 import health
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 
 OFF_MS = 50.0           # px4-gps-lag rule D1: suggest only when the lag is this far off the delay EKF2 assumed
 NEAR_MS = 40.0          # within OFF_MS but this close to it: say so, with one decimal
@@ -46,6 +48,15 @@ DEFAULT_DELAY_MS = 110.0  # PX4 v1.18+: used when SENS_GPSn_ID are set and none 
 DELAY_TOPICS = ("vehicle_gps_position", "vehicle_gnss")
 NEW_TOPIC_REASON = ("this log uses PX4's newer vehicle_gnss topic (PX4 main since 2026-09-29), "
                     "which gps_lag.py does not read yet")
+# px4-gps-lag studies/mismatch-2026/GRADE.md (pre-registered; D1 fired, M3 failed): 256 public logs,
+# 93 more than 50 ms off their setting. Median lift (log10 of the GPS velocity test ratio while
+# accelerating over steady flight) 0.4348 vs 0.24285; logs with any rejection 20.43% vs 15.95%,
+# difference +4.5 points, 95% interval -5.3 to +14.2.
+MISMATCH_NOTE = ("On public PX4 logs, a delay this far off went with higher EKF2 GPS velocity test ratios "
+                 "while accelerating (median lift 0.43 vs 0.24: the ratio while accelerating was 2.7 times "
+                 "its steady-flight value, against 1.7 times on logs within 50 ms), and mismatched logs saw "
+                 "more GPS velocity rejections (20% of logs against 16%, a gap within chance on 93 and 163 "
+                 "logs). Source: px4-gps-lag, studies/mismatch-2026/GRADE.md.")
 BATTERY = {0: "none", 1: "low", 2: "critical", 3: "emergency", 4: "failed"}
 FLEET = "208 public PX4 flights (fleet-health-2026)"
 
@@ -355,6 +366,8 @@ def render(r):
         elif v["status"] == "off":
             lines += ["More than %.0f ms off, but with the innovations disagreeing there is no suggestion; "
                       "look at this flight in EKF2 log replay." % OFF_MS, ""]
+        if v["status"] == "off":
+            lines += [MISMATCH_NOTE, ""]
     return "\n".join(lines)
 
 

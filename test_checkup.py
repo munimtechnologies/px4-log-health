@@ -10,6 +10,8 @@ import numpy as np
 
 import checkup
 
+NOTE = "median lift 0.43 vs 0.24"   # in checkup.MISMATCH_NOTE, shown only for logs more than 50 ms off
+
 
 def lag(d, passed=True, lag_ms=None, param=110.0):
     return {"passed": passed, "reason": "ok" if passed else "too little manoeuvring",
@@ -155,11 +157,14 @@ class Verdict118(unittest.TestCase):
         self.assertIn("**Suggestion:** try SENS_GPS0_DELAY = 175 as a starting value.", md)
         self.assertIn("PX4 v1.18 replaced EKF2_GPS_DELAY", md)
         self.assertNotIn("try EKF2_GPS_DELAY", md)
+        self.assertIn(NOTE, md)
 
     def test_within_50_ms(self):
         a = checkup.applied_delay(**inputs(P18))
         v = checkup.gps_verdict(lag(0.0, lag_ms=130.0, param=None), inn(5.0), a)
         self.assertEqual((v["status"], v["suggest_ms"], v["near_line"]), ("ok", None, False))
+        md = checkup.render(report(lag_row=lag(0.0, lag_ms=130.0, param=None), inn_row=inn(5.0), applied=a))
+        self.assertNotIn(NOTE, md)
 
     def test_pps_timing_gets_no_suggestion(self):
         a = checkup.applied_delay(**inputs(P18, samples=[t - 95000 for t in T]))
@@ -172,6 +177,7 @@ class Verdict118(unittest.TestCase):
                       "GPS driver rather than SENS_GPSn_DELAY (+80 ms).", md)
         self.assertIn("so there is no parameter to suggest", md)
         self.assertNotIn("Suggestion", md)
+        self.assertIn("20% of logs against 16%", md)
 
     def test_unmatched_id_suggests_an_id_and_a_delay(self):
         dev = 0xF0000001
@@ -188,6 +194,31 @@ class Verdict118(unittest.TestCase):
         v = checkup.gps_verdict(lag(64.6), inn(31.0), a)
         self.assertEqual((v["param_name"], v["suggest_ms"]), ("EKF2_GPS_DELAY", 175))
         self.assertNotIn("applied", v)
+
+
+class MismatchNote(unittest.TestCase):
+    """The mismatch-2026 line (px4-gps-lag studies/mismatch-2026/GRADE.md, D1 and D2)."""
+
+    def test_the_figures_match_the_study(self):
+        # summary.json: median lift 0.4348 (mismatched) vs 0.24285; rejected share 0.2043 vs 0.1595; n 93 vs 163
+        self.assertEqual((round(0.4348, 2), round(0.24285, 2)), (0.43, 0.24))
+        self.assertEqual((round(10 ** 0.4348, 1), round(10 ** 0.24285, 1)), (2.7, 1.7))
+        self.assertEqual((round(100 * 0.2043), round(100 * 0.1595)), (20, 16))
+        for part in ("median lift 0.43 vs 0.24", "2.7 times", "1.7 times", "20% of logs against 16%",
+                     "within chance on 93 and 163 logs", "studies/mismatch-2026/GRADE.md"):
+            self.assertIn(part, checkup.MISMATCH_NOTE)
+
+    def test_shown_after_the_advice_on_every_off_log(self):
+        for d, i in ((64.6, inn(31.0)), (90.0, inn(-15.0)), (120.0, None), (-60.0, inn(-20.0))):
+            md = checkup.render(report(lag_row=lag(d), inn_row=i))
+            self.assertEqual(md.count(NOTE), 1, d)
+            self.assertLess(md.index("ms off" if i and i["implied_excess_ms"] == -15.0 else "**Suggestion:**"),
+                            md.index(NOTE), d)
+
+    def test_not_shown_otherwise(self):
+        for row in (lag(0.0), lag(49.7), lag(-50.0), lag(0.0, passed=False), lag(0.0, lag_ms=200.0, param=None)):
+            self.assertNotIn(NOTE, checkup.render(report(lag_row=row, inn_row=inn(5.0))))
+        self.assertNotIn(NOTE, checkup.render(report(skipped="gps_lag.py and innov.py not found")))
 
 
 def report(h=HEALTH, lag_row=None, inn_row=None, skipped=None, place=None, applied=None):
@@ -219,6 +250,7 @@ class Render(unittest.TestCase):
         self.assertNotIn("Suggestion", md)
         self.assertNotIn("*(tied)*", md)
         self.assertNotIn("PX4 v1.18 replaced", md)
+        self.assertNotIn(NOTE, md)
 
     def test_tied_place_is_explained(self):
         md = checkup.render(report(lag_row=lag(0.0), place={"clip_per_min": "p10-p75 (tied)",
@@ -234,12 +266,14 @@ class Render(unittest.TestCase):
         self.assertIn("close to the 50 ms line (+49.7 ms): no change suggested; measure another flight", md)
         self.assertNotIn("nothing to change", md)
         self.assertNotIn("Suggestion", md)
+        self.assertNotIn(NOTE, md)
         md = checkup.render(report(lag_row=lag(-42.0), inn_row=inn(-9.0)))
         self.assertIn("(-42.0 ms): no change suggested", md)
 
     def test_no_setting_names_both_parameters(self):
         md = checkup.render(report(lag_row=lag(0.0, lag_ms=140.0, param=None)))
         self.assertIn("no GPS delay setting to compare with (EKF2_GPS_DELAY, or SENS_GPS0_DELAY", md)
+        self.assertNotIn(NOTE, md)
 
     def test_no_flags(self):
         h = dict(HEALTH, flags=[], notes=[])
@@ -260,12 +294,14 @@ class Render(unittest.TestCase):
         self.assertIn("lean the same way (implied +31 ms)", md)
         self.assertIn("**Suggestion:** try EKF2_GPS_DELAY = 175 as a starting value.", md)
         self.assertIn("EKF2 log replay", md)
+        self.assertIn(checkup.MISMATCH_NOTE, md)
 
     def test_no_suggestion_when_disagreeing(self):
         md = checkup.render(report(lag_row=lag(90.0), inn_row=inn(-15.0)))
         self.assertIn("lean the other way (implied -15 ms)", md)
         self.assertNotIn("Suggestion", md)
         self.assertIn("there is no suggestion", md)
+        self.assertIn(NOTE, md)
 
     def test_innovation_not_checked_says_why(self):
         md = checkup.render(report(lag_row=lag(120.0), inn_row=inn(None, passed=False)))
@@ -275,6 +311,7 @@ class Render(unittest.TestCase):
     def test_lag_not_measured_and_gps_skipped(self):
         md = checkup.render(report(lag_row=lag(0.0, passed=False)))
         self.assertIn("Not measured: too little manoeuvring.", md)
+        self.assertNotIn(NOTE, md)
         md = checkup.render(report(skipped="gps_lag.py and innov.py not found (run fetch_deps.py)"))
         self.assertIn("Not checked: gps_lag.py and innov.py not found", md)
 
