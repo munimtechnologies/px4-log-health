@@ -8,6 +8,9 @@ assumed, and checks the direction against EKF2's own GPS velocity
 innovations (px4-gps-lag, studies/fleet-2026/GRADE-innov-confirm.md). When
 the lag is more than 50 ms off, it says what px4-gps-lag's mismatch-2026
 study saw on public logs that far off (studies/mismatch-2026/GRADE.md).
+When a serial u-blox receiver runs GPS_UBX_DYNMODEL 6 (airborne <1g), it
+says what px4-gps-lag's dynmodel-2026 study and its paired check saw
+(studies/dynmodel-2026/GRADE.md and GRADE-paired.md).
 
 The delay EKF2 assumed is the log's EKF2_GPS_DELAY up to PX4 v1.17. PX4 PR
 #26660 (on main since 2026-03-18, in v1.18) removed that parameter: the
@@ -39,7 +42,7 @@ import sys
 
 import health
 
-__version__ = "0.3.3"
+__version__ = "0.3.4"
 
 OFF_MS = 50.0           # px4-gps-lag rule D1: suggest only when the lag is this far off the delay EKF2 assumed
 NEAR_MS = 40.0          # within OFF_MS but this close to it: say so, with one decimal
@@ -57,6 +60,24 @@ MISMATCH_NOTE = ("On public PX4 logs, a delay this far off went with higher EKF2
                  "its steady-flight value, against 1.7 times on logs within 50 ms), and mismatched logs saw "
                  "more GPS velocity rejections (20% of logs against 16%, a gap within chance on 93 and 163 "
                  "logs). Source: px4-gps-lag, studies/mismatch-2026/GRADE.md.")
+# PX4 device ids: bus type in the low 3 bits (5 = serial), device type in bits 16-23. The PX4 GPS
+# driver's u-blox types: 0xA5 (model not detected), 0xA6, 0xA7, 0xA8 (M8), 0xA9 (M9), 0xAA (F9P),
+# 0xAC (M10). GPS_UBX_DYNMODEL only reaches receivers that PX4's own driver configures.
+UBLOX_DEVTYPES = frozenset((0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xAC))
+SERIAL_BUS = 5
+# px4-gps-lag studies/dynmodel-2026/GRADE.md (pre-registered, all checks held): 244 public u-blox logs,
+# one per vehicle; model-6 logs a median +45.6 ms (33.2 to 55.0) later than model-7 logs of the same
+# receiver class; 41.5% of model-6 logs more than 50 ms past their delay setting (model 7: 8.8%).
+# GRADE-paired.md (pre-registered, D1): the two logs on PX4 PR #24831, one vehicle (u-blox F9P),
+# model 6 214.2 ms vs model 7 110.5 ms, +103.7 ms.
+DYNMODEL_NOTE = ("**u-blox dynamic model 6.** This receiver runs GPS_UBX_DYNMODEL = 6 (airborne <1g), which "
+                 "PX4 set for every multicopter up to v1.16. On public PX4 logs, model-6 u-blox logs lagged "
+                 "a median 46 ms more than model-7 logs from the same receiver class (244 vehicles), and "
+                 "about 4 in 10 were more than 50 ms past their delay setting. On the one vehicle flown with "
+                 "both (the logs on PX4 PR #24831), the model-6 flight lagged 104 ms more than the model-7 "
+                 "flight. If GPS lag matters on this vehicle, try GPS_UBX_DYNMODEL = 7 (<2g, PX4's default "
+                 "for multicopters since v1.17; it takes effect after a reboot) and measure again. Source: "
+                 "px4-gps-lag, studies/dynmodel-2026/GRADE.md and GRADE-paired.md.")
 BATTERY = {0: "none", 1: "low", 2: "critical", 3: "emergency", 4: "failed"}
 FLEET = "208 public PX4 flights (fleet-health-2026)"
 
@@ -173,6 +194,29 @@ def applied_delay(params, topic=None, stamps=(), samples=(), device_ids=()):
     return out
 
 
+def dynmodel_info(inputs):
+    """The u-blox dynamic model of one log, from read_delay_inputs' output: None unless the log has
+    GPS_UBX_DYNMODEL and its GNSS receiver (the most common device id) is a u-blox on a serial port,
+    which is what PX4's own GPS driver configures. note is True for model 6 (airborne <1g)."""
+    if not inputs:
+        return None
+    value = (inputs.get("params") or {}).get("GPS_UBX_DYNMODEL")
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return None
+    ids = [_u32(i) for i in inputs.get("device_ids") or () if i]
+    if not ids:
+        return None
+    dev = max(sorted(set(ids)), key=ids.count)
+    devtype = (dev >> 16) & 0xFF
+    if (dev & 0x7) != SERIAL_BUS or devtype not in UBLOX_DEVTYPES:
+        return None
+    return {"value": value, "device_id": dev, "devtype": "0x%02X" % devtype, "note": value == 6}
+
+
 def gps_verdict(lag, inn, applied=None):
     """What to tell the user about the GPS delay of one log.
 
@@ -224,15 +268,16 @@ def check(path, baseline):
     if baseline:
         h["fleet_place"] = health.fleet_place(h, baseline)
     g = run_gps(path)
+    inputs = _read_delay_inputs_or_none(path)
     verdict = None
     if not g.get("skipped"):
-        inputs = _read_delay_inputs_or_none(path)
         applied = applied_delay(**inputs) if inputs else None
         lag = g.get("lag") or {}
         if inputs and inputs.get("topic") == "vehicle_gnss" and not lag.get("passed"):
             g["lag"] = dict(lag, passed=False, reason="%s (%s)" % (NEW_TOPIC_REASON, lag.get("reason", "not run")))
         verdict = gps_verdict(g.get("lag"), g.get("innov"), applied)
-    return {"log": path, "checkup": __version__, "health": h, "gps": g, "gps_verdict": verdict}
+    return {"log": path, "checkup": __version__, "health": h, "gps": g, "gps_verdict": verdict,
+            "gps_dynmodel": dynmodel_info(inputs)}
 
 
 def _num(x, spec="%.1f"):
@@ -368,6 +413,8 @@ def render(r):
                       "look at this flight in EKF2 log replay." % OFF_MS, ""]
         if v["status"] == "off":
             lines += [MISMATCH_NOTE, ""]
+    if (r.get("gps_dynmodel") or {}).get("note"):
+        lines += [DYNMODEL_NOTE, ""]
     return "\n".join(lines)
 
 
