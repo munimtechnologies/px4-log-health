@@ -38,9 +38,9 @@ Real reports: three public logs from PX4 v1.13-v1.16 in [studies/fleet-health-20
 
 ### In your browser
 
-[munimv2.github.io/px4-log-check](https://munimv2.github.io/px4-log-check/) runs `checkup.py` in [Pyodide](https://pyodide.org/) (Python in WebAssembly), with numpy and pyulog. For now it runs 0.3.1, from this repo's v0.3.1 tag, so it does not yet read the per-receiver delay of PX4 v1.18 logs or add the dynamic model line. Pick one or more `.ulg` files and the report appears on the page. You can download it as Markdown and download the figures as JSON lines. The page fetches Pyodide and numpy from the jsDelivr CDN, pyulog from PyPI, and the checker's code from this repo's tag and px4-gps-lag at a pinned commit. The log itself stays in the browser tab.
+[munimv2.github.io/px4-log-check](https://munimv2.github.io/px4-log-check/) runs `checkup.py` in [Pyodide](https://pyodide.org/) (Python in WebAssembly), with numpy and pyulog. It runs 0.3.4, from this repo's v0.3.4 tag, so it reads the per-receiver delay of PX4 v1.18 logs and adds the dynamic model line, like the command line. Pick one or more `.ulg` files and the report appears on the page. You can download it as Markdown and download the figures as JSON lines. The page fetches Pyodide and numpy from the jsDelivr CDN, pyulog from PyPI, and the checker's code from this repo's tag and px4-gps-lag at a pinned commit. The log itself stays in the browser tab.
 
-**How it was checked.** A sealed run loaded the page's own `core.js` in Node with the same Pyodide build. It ran the three public logs of the sample report through it. The browser report was identical to the sample report `checkup.py` produced from the command line.
+**How it was checked.** A sealed run loaded the page's own `core.js` (0.2.0) in Node with the same Pyodide build (314.0.7). It ran the two logs attached to PX4 PR #24831 through it, downloaded once and checked against the sha256 px4-gps-lag's paired job recorded (`aa6997a9…3b49`). The browser report was identical to [studies/dynmodel/report.md](studies/dynmodel/report.md), the report `checkup.py` 0.3.4 wrote from the command line. Both logs were read as a serial u-blox F9P, and only the model-6 log got the dynamic model line. The page's first version (0.3.1) was checked the same way on the three public logs of the sample report.
 
 ### As a GitHub Action
 
