@@ -1,4 +1,4 @@
-"""Tests for checkup 0.3.4's u-blox dynamic model line (px4-gps-lag studies/dynmodel-2026).
+"""Tests for checkup 0.3.5's u-blox dynamic model line (px4-gps-lag studies/dynmodel-2026).
 By MV2 of Munim, Inc.; written with AI agents. Apache-2.0."""
 
 import json
@@ -36,6 +36,9 @@ def lag(d=0.0, passed=True):
 
 
 class Info(unittest.TestCase):
+    def test_version(self):
+        self.assertEqual(checkup.__version__, "0.3.5")
+
     def test_device_id_layout(self):
         self.assertEqual(F9P_SERIAL & 0x7, 5)
         self.assertEqual((F9P_SERIAL >> 16) & 0xFF, 0xAA)
@@ -84,14 +87,26 @@ class Note(unittest.TestCase):
     def test_figures_match_the_studies(self):
         # dynmodel-2026 GRADE.md: K1 +45.6 ms, 244 graded logs, 41.5% of model-6 logs > 50 ms past setting.
         # GRADE-paired.md: 214.2 - 110.5 = 103.7 ms.
+        # GRADE-mechanism.md: time constant 110 ms (model 6) vs 20 ms (model 7), +90 ms.
         self.assertEqual(round(45.6), 46)
         self.assertEqual(round(214.2 - 110.5, 1), 103.7)
         self.assertEqual(round(103.7), 104)
+        self.assertEqual(110 - 20, 90)
         for part in ("GPS_UBX_DYNMODEL = 6 (airborne <1g)", "every multicopter up to v1.16", "median 46 ms more",
                      "(244 vehicles)", "about 4 in 10", "PX4 PR #24831", "104 ms more",
+                     "heavier smoothing", "about 110 ms against 20 ms",
+                     "no single GPS delay setting fully cancels",
                      "GPS_UBX_DYNMODEL = 7 (<2g", "since v1.17", "after a reboot",
-                     "studies/dynmodel-2026/GRADE.md and GRADE-paired.md"):
+                     "studies/dynmodel-2026/GRADE.md, GRADE-paired.md and GRADE-mechanism.md"):
             self.assertIn(part, checkup.DYNMODEL_NOTE)
+
+    def test_sentences_in_order(self):
+        note = checkup.DYNMODEL_NOTE
+        order = [note.index(p) for p in ("104 ms more", "heavier smoothing", "try GPS_UBX_DYNMODEL = 7",
+                                         "Source: px4-gps-lag")]
+        self.assertEqual(order, sorted(order))
+        self.assertNotIn("  ", note)
+        self.assertEqual(note.count(HEAD), 1)
 
     def report(self, model, lag_row, skipped=False, ids=None):
         gps = {"lag": None, "innov": None, "skipped": "gps_lag.py and innov.py not found"} if skipped \
@@ -107,6 +122,7 @@ class Note(unittest.TestCase):
             self.assertTrue(r["gps_dynmodel"]["note"])
             md = checkup.render(r)
             self.assertEqual(md.count(HEAD), 1)
+            self.assertEqual(md.count("heavier smoothing"), 1)
             self.assertGreater(md.index(HEAD), md.index("### GPS delay"))
             json.dumps(r)
 
@@ -125,6 +141,7 @@ class Note(unittest.TestCase):
         for model, ids in ((7, None), (8, None), (None, None), (6, [dev(0xAA, bus_type=3)] * 3)):
             md = checkup.render(self.report(model, lag(0.0), ids=ids))
             self.assertNotIn(HEAD, md, (model, ids))
+            self.assertNotIn("heavier smoothing", md, (model, ids))
 
     def test_not_a_flag(self):
         r = self.report(6, lag(0.0))

@@ -9,8 +9,9 @@ innovations (px4-gps-lag, studies/fleet-2026/GRADE-innov-confirm.md). When
 the lag is more than 50 ms off, it says what px4-gps-lag's mismatch-2026
 study saw on public logs that far off (studies/mismatch-2026/GRADE.md).
 When a serial u-blox receiver runs GPS_UBX_DYNMODEL 6 (airborne <1g), it
-says what px4-gps-lag's dynmodel-2026 study and its paired check saw
-(studies/dynmodel-2026/GRADE.md and GRADE-paired.md).
+says what px4-gps-lag's dynmodel-2026 study, its paired check and its
+mechanism check saw (studies/dynmodel-2026/GRADE.md, GRADE-paired.md and
+GRADE-mechanism.md).
 
 The delay EKF2 assumed is the log's EKF2_GPS_DELAY up to PX4 v1.17. PX4 PR
 #26660 (on main since 2026-03-18, in v1.18) removed that parameter: the
@@ -42,7 +43,7 @@ import sys
 
 import health
 
-__version__ = "0.3.4"
+__version__ = "0.3.5"
 
 OFF_MS = 50.0           # px4-gps-lag rule D1: suggest only when the lag is this far off the delay EKF2 assumed
 NEAR_MS = 40.0          # within OFF_MS but this close to it: say so, with one decimal
@@ -70,14 +71,19 @@ SERIAL_BUS = 5
 # receiver class; 41.5% of model-6 logs more than 50 ms past their delay setting (model 7: 8.8%).
 # GRADE-paired.md (pre-registered, D1): the two logs on PX4 PR #24831, one vehicle (u-blox F9P),
 # model 6 214.2 ms vs model 7 110.5 ms, +103.7 ms.
+# GRADE-mechanism.md (pre-registered, M1 = smoothing): first-order low-pass then delay, fitted on the
+# same two logs: time constant 110 ms (90 to 140) at model 6 vs 20 ms (0 to 60) at model 7, +90 ms
+# (59.8 to 130); delay after the filter 110 vs 95 ms, +15 ms (-20 to +50).
 DYNMODEL_NOTE = ("**u-blox dynamic model 6.** This receiver runs GPS_UBX_DYNMODEL = 6 (airborne <1g), which "
                  "PX4 set for every multicopter up to v1.16. On public PX4 logs, model-6 u-blox logs lagged "
                  "a median 46 ms more than model-7 logs from the same receiver class (244 vehicles), and "
                  "about 4 in 10 were more than 50 ms past their delay setting. On the one vehicle flown with "
                  "both (the logs on PX4 PR #24831), the model-6 flight lagged 104 ms more than the model-7 "
-                 "flight. If GPS lag matters on this vehicle, try GPS_UBX_DYNMODEL = 7 (<2g, PX4's default "
+                 "flight, and the extra lag behaved like heavier smoothing (a fitted filter time constant of about "
+                 "110 ms against 20 ms), which no single GPS delay setting fully cancels. If GPS lag matters "
+                 "on this vehicle, try GPS_UBX_DYNMODEL = 7 (<2g, PX4's default "
                  "for multicopters since v1.17; it takes effect after a reboot) and measure again. Source: "
-                 "px4-gps-lag, studies/dynmodel-2026/GRADE.md and GRADE-paired.md.")
+                 "px4-gps-lag, studies/dynmodel-2026/GRADE.md, GRADE-paired.md and GRADE-mechanism.md.")
 BATTERY = {0: "none", 1: "low", 2: "critical", 3: "emergency", 4: "failed"}
 FLEET = "208 public PX4 flights (fleet-health-2026)"
 

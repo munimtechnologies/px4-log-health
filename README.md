@@ -24,7 +24,7 @@ It prints one JSON line per log with each figure, the PX4 release, a list of pla
 
 `checkup.py` turns each log into a short Markdown report: the flags, a table of every figure with its place among 208 public flights, and a **GPS delay** verdict. The verdict measures how far the GPS lags the IMU with [px4-gps-lag](https://github.com/munimtechnologies/px4-gps-lag), compares that with the delay EKF2 assumed, and checks the direction against EKF2's own GPS velocity innovations. It suggests a new delay only when the measured lag is more than 50 ms off and the innovations don't point the other way. That is the rule px4-gps-lag's fleet studies support ([GRADE-innov-confirm.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/fleet-2026/GRADE-innov-confirm.md)). A suggested value is a starting point to check with EKF2 log replay, not a setting to fly.
 
-The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change. When a serial u-blox receiver runs `GPS_UBX_DYNMODEL` 6, the report adds one line about it (see 0.3.4 below).
+The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change. When a serial u-blox receiver runs `GPS_UBX_DYNMODEL` 6, the report adds one line about it (see 0.3.4 and 0.3.5 below).
 
 ```
 pip install numpy pyulog requests
@@ -34,7 +34,7 @@ python checkup.py flight.ulg [more.ulg ...] --md report.md --json rows.jsonl [--
 
 Without `--md` the report goes to stdout. `--md` appends, so it can point at `$GITHUB_STEP_SUMMARY`. With `--fail-on-flag`, the exit code is 1 when any log raises a flag or gets a suggested GPS delay.
 
-Real reports: three public logs from PX4 v1.13-v1.16 in [studies/fleet-health-2026/sample-report.md](studies/fleet-health-2026/sample-report.md), three public logs from PX4 v1.18 pre-releases in [studies/v118/report.md](studies/v118/report.md), and the two dynamic-model logs from PX4 PR #24831 in [studies/dynmodel/report.md](studies/dynmodel/report.md).
+Real reports: three public logs from PX4 v1.13-v1.16 in [studies/fleet-health-2026/sample-report.md](studies/fleet-health-2026/sample-report.md), three public logs from PX4 v1.18 pre-releases in [studies/v118/report.md](studies/v118/report.md), and the two dynamic-model logs from PX4 PR #24831 in [studies/dynmodel/report.md](studies/dynmodel/report.md) (0.3.4) and [studies/dynmodel/report-0.3.5.md](studies/dynmodel/report-0.3.5.md) (0.3.5).
 
 ### In your browser
 
@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/px4-log-health@v0.3.4
+      - uses: munimtechnologies/px4-log-health@v0.3.5
         with:
           logs: "**/*.ulg"          # space-separated globs
           fail-on-flag: "false"     # "true" fails the step on any flag or suggestion
@@ -62,7 +62,14 @@ jobs:
 
 The Action installs numpy and pyulog, fetches `gps_lag.py` and `innov.py` from px4-gps-lag at a pinned commit (input `gps-lag-ref`), and writes one JSON line per log to `px4-log-health.jsonl` (input `json`).
 
-**How it was checked.** A sealed run went through the unit tests (checkup, health and px4-gps-lag's tests). It then ran `checkup.py` and the Action's script, from a bare folder, on three real public logs: one more than 50 ms off its setting, one within 20 ms, and one from PX4 v1.12 or older. Every health figure, lag and implied innovation excess matched the figures the studies had recorded. That run was for 0.3.1; 0.3.2 to 0.3.4 were checked as described below.
+**How it was checked.** A sealed run went through the unit tests (checkup, health and px4-gps-lag's tests). It then ran `checkup.py` and the Action's script, from a bare folder, on three real public logs: one more than 50 ms off its setting, one within 20 ms, and one from PX4 v1.12 or older. Every health figure, lag and implied innovation excess matched the figures the studies had recorded. That run was for 0.3.1; 0.3.2 to 0.3.5 were checked as described below.
+
+## What changed in 0.3.5: why model 6 is better changed than compensated
+
+- **The dynamic model line now says how the extra lag behaves.** px4-gps-lag's pre-registered mechanism check ([GRADE-mechanism.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/dynmodel-2026/GRADE-mechanism.md)) fitted the two logs attached to PX4 PR #24831 as a first-order low-pass followed by a delay. At model 6 the fitted time constant was **110 ms** (90 to 140), and at model 7 it was **20 ms** (0 to 60). The delay after the filter barely moved (110 against 95 ms). So model 6's extra lag behaved like heavier smoothing, which no single GPS delay setting fully cancels: a filter delays slow manoeuvres more than fast ones. The line now says so, and still suggests trying `GPS_UBX_DYNMODEL` = 7 and measuring again. It is still a note, not a flag. Nothing else changes, and every figure is measured as in 0.3.4.
+- **How many vehicles it concerns.** px4-gps-lag's pre-registered census ([census-2026/GRADE.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/census-2026/GRADE.md)) read one public log each from 250 v1.16 and 250 v1.17 multicopters. **81.6%** of the v1.16 multicopters ran model 6. On v1.17, **5.6%** still did, almost all with 6 set against the new default. If you upgraded with an old parameter file, this line is the one to look for.
+
+**How it was checked.** A sealed run took 0.3.4 from this repo's main branch and compared it with 0.3.5. The only changes are the line's wording, its source comment, the module docstring and the version. It passed all 100 unit tests of checkup, `test_checkup_dynmodel` (which now also pins the smoothing figures), health and px4-gps-lag. It then ran the whole checkup on the two logs attached to PR #24831: [studies/dynmodel/report-0.3.5.md](studies/dynmodel/report-0.3.5.md) and [smoke-0.3.5.json](studies/dynmodel/smoke-0.3.5.json). The model-6 log got the line once and the model-7 log did not. The lags were 214.2 and 110.5 ms, as before, and no check failed.
 
 ## What changed in 0.3.4: the u-blox dynamic model
 
