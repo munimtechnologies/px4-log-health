@@ -64,6 +64,16 @@ The Action installs numpy and pyulog, fetches `gps_lag.py` and `innov.py` from p
 
 **How it was checked.** A sealed run went through the unit tests (checkup, health and px4-gps-lag's tests). It then ran `checkup.py` and the Action's script, from a bare folder, on three real public logs: one more than 50 ms off its setting, one within 20 ms, and one from PX4 v1.12 or older. Every health figure, lag and implied innovation excess matched the figures the studies had recorded. That run was for 0.3.1; 0.3.2 to 0.3.6 were checked as described below.
 
+### For coding agents (agent skill)
+
+[skills/px4-log-health/SKILL.md](skills/px4-log-health/SKILL.md) tells a coding agent (Claude Code, Codex, Cursor and others that read the open SKILL.md format) when to reach for this checker, how to run it on a user's `.ulg` from the pinned release, and how to explain the report without overstating it: a flag is not a diagnosis, a suggested GPS delay is a value to verify with EKF2 log replay, and PX4 main logs get no GPS delay verdict yet. Install it into a project with the open [skills](https://github.com/vercel-labs/skills) CLI:
+
+```
+npx skills add munimtechnologies/px4-log-health --skill px4-log-health
+```
+
+The skill only runs the checker locally; it sends no log anywhere.
+
 ## What changed in 0.3.6: the fleet shows the same smoothing
 
 - **One more sentence in the dynamic model line.** px4-gps-lag's pre-registered fleet mechanism check ([GRADE-tau-fleet.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/dynmodel-2026/GRADE-tau-fleet.md)) ran the low-pass-plus-delay fit of 0.3.5's single-vehicle check on dynmodel-2026's own public logs. All 166 logs at models 6 and 7 were downloaded again, and each reproduced its published lag within 2 ms. Within receiver classes (104 logs at model 6 and 59 at model 7), the fitted time constant was a median **110 ms** longer at model 6 (interval 50 to 145), while the delay after the filter was 45 ms shorter (−75 to 0). Their sum, which doesn't depend on how the fit splits the two, was +53.8 ms (40 to 80). So the smoothing seen on the one PR #24831 vehicle shows across public logs too. The line now says so after the single-vehicle figure, and it still suggests trying `GPS_UBX_DYNMODEL` = 7 and measuring again. It is still a note, not a flag. Nothing else changes, and every figure is measured as in 0.3.5.
