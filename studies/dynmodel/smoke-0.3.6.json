@@ -1,0 +1,30 @@
+{
+ "checkup_exit": 0,
+ "rows": [
+  {
+   "file": "log_5_2025-5-27-11-50-34.ulg",
+   "dynmodel": {
+    "value": 7,
+    "device_id": 11141125,
+    "devtype": "0xAA",
+    "note": false
+   },
+   "lag_ms": 110.5,
+   "status": "ok",
+   "note_in_report": false
+  },
+  {
+   "file": "log_8_2025-5-27-12-55-02.ulg",
+   "dynmodel": {
+    "value": 6,
+    "device_id": 11141125,
+    "devtype": "0xAA",
+    "note": true
+   },
+   "lag_ms": 214.2,
+   "status": "off",
+   "note_in_report": true
+  }
+ ],
+ "problems": []
+}
