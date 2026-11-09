@@ -1,0 +1,26 @@
+{
+ "px4-gps-lag/main/studies/gnss-2026/gnss_logs.py": {
+  "sha256": "cfb0c71b0177148823db9a95676caa285ca4212e42c2f0d4a403e30e82cdbb1f",
+  "bytes": 22985
+ },
+ "px4-log-health/main/studies/magcurrent-2026/PLAN.md": {
+  "sha256": "0884f6f28acb31290238a009c27b14fe8e40f170ef9b387cc70a8c40d8c95e5d",
+  "bytes": 5244
+ },
+ "local/PLAN.md": {
+  "sha256": "0884f6f28acb31290238a009c27b14fe8e40f170ef9b387cc70a8c40d8c95e5d",
+  "bytes": 5244
+ },
+ "local/mag_logs.py": {
+  "sha256": "10d3ce76c1ed168715aa8b35241d44cc00e2dae86898e4e60964ee001474b66d",
+  "bytes": 26612
+ },
+ "local/test_mag_logs.py": {
+  "sha256": "f31eaceabdbb143ab1c4dfaf28c2d800cce3e04fea6e4db3ca00f672d49d26df",
+  "bytes": 10665
+ },
+ "local/job_fetch.py": {
+  "sha256": "0161853bedcf686cc7af730e3a4c5e743138b7d72502be1222621aeda15392b5",
+  "bytes": 2303
+ }
+}

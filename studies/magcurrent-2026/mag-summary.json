@@ -1,0 +1,269 @@
+{
+ "mag_logs": "0.1.0",
+ "predictions": {
+  "K1": false,
+  "K2": true,
+  "K3": true,
+  "K4": true,
+  "K5": null,
+  "K6": null
+ },
+ "reported": {
+  "requests": 160,
+  "status_counts": {
+   "mag and battery": 150,
+   "too big": 9,
+   "no mag or battery topic": 1
+  },
+  "downloaded": 150,
+  "read_ok": 134,
+  "measurable": 63,
+  "read_errors": [
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data",
+   "no vehicle_magnetometer data"
+  ],
+  "why_not": {
+   "median airborne current under 0.5 A": 24,
+   "current range under 5 A": 21,
+   "no valid battery current": 14,
+   "fewer than 150 airborne pairs": 12
+  },
+  "classes": {
+   "weak": 46,
+   "strong": 11,
+   "moderate": 6
+  },
+  "pct_quantiles": {
+   "n": 63,
+   "p10": 0.507,
+   "p25": 1.265,
+   "median": 3.724,
+   "p75": 12.963,
+   "p90": 21.557,
+   "max": 106.043
+  },
+  "strong_share": 0.1746,
+  "comp_type_counts": {
+   "0": 143,
+   "1": 1
+  },
+  "comp_on_rows": [
+   {
+    "order": 67,
+    "comp_type": 1,
+    "pct": 7.851,
+    "class": "weak"
+   }
+  ],
+  "spearman_pct_vs_mag_test_ratio": 0.1053,
+  "with_mag_test_ratio": 19,
+  "internal_n": 0,
+  "external_n": 0,
+  "internal_pct_median": null,
+  "external_pct_median": null,
+  "external_unknown": 63,
+  "pct_median_by_bus": {
+   "None": null,
+   "i2c": 4.229,
+   "spi": 13.655,
+   "uavcan": 1.889
+  },
+  "pct_median_by_mav_type": {
+   "Fixed Wing": 4.597,
+   "Ground Rover": 21.557,
+   "Hexarotor": 5.149,
+   "Octorotor": 8.883,
+   "Quad-rotor VTOL (Tailsitter)": 5.198,
+   "Quadrotor": 2.678,
+   "Submarine": 12.224,
+   "Tiltrotor VTOL": 4.293,
+   "VTOL Standard": 2.135
+  },
+  "mav_types": {
+   "Quadrotor": 39,
+   "Fixed Wing": 7,
+   "Tiltrotor VTOL": 5,
+   "Hexarotor": 4,
+   "Octorotor": 2,
+   "Quad-rotor VTOL (Tailsitter)": 2,
+   "VTOL Standard": 2,
+   "Ground Rover": 1,
+   "Submarine": 1
+  },
+  "airborne_from": {
+   "land_detected": 132,
+   "armed": 2
+  },
+  "thrust_pct_quantiles": {
+   "n": 61,
+   "p10": 0.683,
+   "p25": 1.251,
+   "median": 4.059,
+   "p75": 13.114,
+   "p90": 23.041,
+   "max": 225.77
+  },
+  "negative_slope_share": 0.3333,
+  "strong_rows": [
+   {
+    "order": 47,
+    "sys_hw": "ZEROONE_X6",
+    "mav_type": "Fixed Wing",
+    "bus": "i2c",
+    "external": null,
+    "pct": 98.105,
+    "r": 0.5673,
+    "slope_mga_per_a": 18.441,
+    "comp_type": 0
+   },
+   {
+    "order": 149,
+    "sys_hw": "PX4_FMU_V6C",
+    "mav_type": "Fixed Wing",
+    "bus": "i2c",
+    "external": null,
+    "pct": 37.868,
+    "r": 0.8938,
+    "slope_mga_per_a": 1.521,
+    "comp_type": 0
+   },
+   {
+    "order": 117,
+    "sys_hw": "PX4_FMU_V6C",
+    "mav_type": "Quadrotor",
+    "bus": "i2c",
+    "external": null,
+    "pct": 35.208,
+    "r": 0.867,
+    "slope_mga_per_a": 41.527,
+    "comp_type": 0
+   },
+   {
+    "order": 23,
+    "sys_hw": "PX4_FMU_V5",
+    "mav_type": "Tiltrotor VTOL",
+    "bus": "i2c",
+    "external": null,
+    "pct": 29.303,
+    "r": -0.9304,
+    "slope_mga_per_a": -6.811,
+    "comp_type": 0
+   },
+   {
+    "order": 134,
+    "sys_hw": "PX4_FMU_V5X",
+    "mav_type": "Quadrotor",
+    "bus": "i2c",
+    "external": null,
+    "pct": 25.057,
+    "r": 0.6474,
+    "slope_mga_per_a": 4.38,
+    "comp_type": 0
+   },
+   {
+    "order": 135,
+    "sys_hw": "PX4_FMU_V5X",
+    "mav_type": "Quadrotor",
+    "bus": "i2c",
+    "external": null,
+    "pct": 19.601,
+    "r": 0.6877,
+    "slope_mga_per_a": 5.176,
+    "comp_type": 0
+   },
+   {
+    "order": 72,
+    "sys_hw": "PX4_FMU_V6C",
+    "mav_type": "Quadrotor",
+    "bus": "i2c",
+    "external": null,
+    "pct": 19.289,
+    "r": 0.728,
+    "slope_mga_per_a": 19.671,
+    "comp_type": 0
+   },
+   {
+    "order": 148,
+    "sys_hw": "PX4_FMU_V5X",
+    "mav_type": "Quadrotor",
+    "bus": "i2c",
+    "external": null,
+    "pct": 17.384,
+    "r": 0.7599,
+    "slope_mga_per_a": 4.33,
+    "comp_type": 0
+   },
+   {
+    "order": 2,
+    "sys_hw": "PX4_FMU_V6X",
+    "mav_type": "Octorotor",
+    "bus": "i2c",
+    "external": null,
+    "pct": 17.015,
+    "r": 0.7463,
+    "slope_mga_per_a": 11.378,
+    "comp_type": 0
+   },
+   {
+    "order": 95,
+    "sys_hw": "MICOAIR_H743_V2",
+    "mav_type": "Tiltrotor VTOL",
+    "bus": "i2c",
+    "external": null,
+    "pct": 16.014,
+    "r": 0.5588,
+    "slope_mga_per_a": 8.65,
+    "comp_type": 0
+   },
+   {
+    "order": 121,
+    "sys_hw": "MICOAIR_H743_V2",
+    "mav_type": "Quadrotor",
+    "bus": "i2c",
+    "external": null,
+    "pct": 15.556,
+    "r": 0.6051,
+    "slope_mga_per_a": 15.085,
+    "comp_type": 0
+   }
+  ]
+ },
+ "list": {
+  "listed": 488002,
+  "eligible": 90141,
+  "excluded": {
+   "shorter than 120 s": 194821,
+   "simulation": 36997,
+   "older than v1.13": 15589,
+   "before 2025-01-01": 150454
+  },
+  "by_kind": {
+   "pre": 15550,
+   "release": 38066,
+   "dev": 36459,
+   "unknown": 66
+  },
+  "candidates": 90141,
+  "candidate_vehicles": 15101
+ },
+ "pass": {
+  "requested": 160,
+  "downloaded": 150,
+  "stop": "max full logs"
+ },
+ "wall_s": 1324.0
+}
