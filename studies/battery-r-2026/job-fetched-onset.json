@@ -1,0 +1,34 @@
+{
+ "px4-log-health/main/studies/battery-r-2026/battr_logs.py": {
+  "sha256": "01b071b87a324cf55a4b2f62a80776a00610e3cb44fd5d5d9bfb46436bc543d4",
+  "bytes": 25832
+ },
+ "px4-log-health/main/studies/battery-r-2026/battr-rows.jsonl": {
+  "sha256": "49533d87df8565a5132d14eeba11d6ee744ecc3bbd3b2e1ed5462ac263494161",
+  "bytes": 187486
+ },
+ "px4-log-health/main/studies/battery-r-2026/PLAN-onset.md": {
+  "sha256": "5b70d7515e460e534a80f89e2205468e0d12eebe0822981a88632f2cb04efc38",
+  "bytes": 4848
+ },
+ "px4-gps-lag/main/studies/gnss-2026/gnss_logs.py": {
+  "sha256": "cfb0c71b0177148823db9a95676caa285ca4212e42c2f0d4a403e30e82cdbb1f",
+  "bytes": 22985
+ },
+ "local/PLAN-onset.md": {
+  "sha256": "5b70d7515e460e534a80f89e2205468e0d12eebe0822981a88632f2cb04efc38",
+  "bytes": 4848
+ },
+ "local/onset.py": {
+  "sha256": "9661290b8b610f1b05ce380f09ed2953d48bd8cbdc60efb4f38c83d490899e76",
+  "bytes": 10950
+ },
+ "local/test_onset.py": {
+  "sha256": "27e631bc11e08404c0c9e10a27ee7f75e1497ce1fc833196c6ff02d1e4ebff1e",
+  "bytes": 6364
+ },
+ "local/job_fetch_onset.py": {
+  "sha256": "4e4f1767915685d3c3f138fe0e112b0dd9faec5016eb7ecb8d92f85c1c8c58a9",
+  "bytes": 3083
+ }
+}

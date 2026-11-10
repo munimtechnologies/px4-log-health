@@ -1,0 +1,224 @@
+{
+ "onset": "0.1.0",
+ "battr_logs": "0.1.0",
+ "predictions": {
+  "O1": true,
+  "O2": true,
+  "O3": false,
+  "O4": true
+ },
+ "reported": {
+  "requests": 225,
+  "status_counts": {
+   "estimate field": 150,
+   "no estimate field": 60,
+   "too big": 15
+  },
+  "downloaded": 150,
+  "read_ok": 136,
+  "measurable": 71,
+  "why_not": {
+   "no active estimator with valid current": 54,
+   "median airborne current under 0.5 A": 6,
+   "fewer than 150 airborne samples": 5
+  },
+  "collapsed": 10,
+  "collapsed_share": 0.1408,
+  "before_takeoff": 8,
+  "before_takeoff_share": 0.8,
+  "onset_phases": {
+   "before the log": 6,
+   "airborne": 2,
+   "armed on ground": 2
+  },
+  "onset_currents_a": [
+   0.756,
+   2.822,
+   2.989,
+   16.456
+  ],
+  "onset_current_median_a": 2.905,
+  "onset_s_from_takeoff": [
+   -96.2,
+   -4.4,
+   4.6,
+   74.4
+  ],
+  "log_start_phases": {
+   "armed on ground": 54,
+   "disarmed": 10,
+   "unknown": 7
+  },
+  "o4_pairs": 35,
+  "spearman_r_end_vs_step": 0.7922,
+  "r_end_mohm_alive_quantiles": {
+   "n": 61,
+   "p10": 0.2924,
+   "p25": 1.0707,
+   "median": 2.6228,
+   "p75": 6.2609,
+   "p90": 9.6528,
+   "max": 78.5349
+  },
+  "r_internal_counts": {
+   "-1.0": 59,
+   "0.002": 5,
+   "0.005": 3,
+   "0.0015": 2,
+   "0.003": 1,
+   "0.025": 1
+  },
+  "collapsed_by_r_internal": {
+   "-1.0": 9,
+   "0.025": 1
+  },
+  "collapsed_rows": [
+   {
+    "order": 11,
+    "sys_hw": "PX4_FMU_V6C",
+    "mav_type": "VTOL Standard",
+    "release": "v1.16.0 255",
+    "r_internal": 0.025,
+    "onset_phase": "before the log",
+    "onset_current_a": null,
+    "onset_s_from_takeoff": null,
+    "log_start_phase": "armed on ground",
+    "first_zero_s": 0.0
+   },
+   {
+    "order": 18,
+    "sys_hw": "CUBEPILOT_CUBEORANGEPLUS",
+    "mav_type": "VTOL Standard",
+    "release": "v1.17.0 255",
+    "r_internal": -1.0,
+    "onset_phase": "before the log",
+    "onset_current_a": null,
+    "onset_s_from_takeoff": null,
+    "log_start_phase": "armed on ground",
+    "first_zero_s": 0.0
+   },
+   {
+    "order": 43,
+    "sys_hw": "PX4_FMU_V6C",
+    "mav_type": "Quadrotor",
+    "release": "v1.17.0 255",
+    "r_internal": -1.0,
+    "onset_phase": "armed on ground",
+    "onset_current_a": 0.756,
+    "onset_s_from_takeoff": -96.2,
+    "log_start_phase": "disarmed",
+    "first_zero_s": 0.0
+   },
+   {
+    "order": 49,
+    "sys_hw": "WEGSOL_V1_2",
+    "mav_type": "Quadrotor",
+    "release": "v1.17.0 64",
+    "r_internal": -1.0,
+    "onset_phase": "before the log",
+    "onset_current_a": null,
+    "onset_s_from_takeoff": null,
+    "log_start_phase": "armed on ground",
+    "first_zero_s": 0.0
+   },
+   {
+    "order": 53,
+    "sys_hw": "CORVON_743V1",
+    "mav_type": "Quadrotor",
+    "release": "v1.17.0 255",
+    "r_internal": -1.0,
+    "onset_phase": "before the log",
+    "onset_current_a": null,
+    "onset_s_from_takeoff": null,
+    "log_start_phase": "armed on ground",
+    "first_zero_s": 0.0
+   },
+   {
+    "order": 74,
+    "sys_hw": "PX4_FMU_V6C",
+    "mav_type": "Quadrotor",
+    "release": "v1.17.0 255",
+    "r_internal": -1.0,
+    "onset_phase": "before the log",
+    "onset_current_a": null,
+    "onset_s_from_takeoff": null,
+    "log_start_phase": "armed on ground",
+    "first_zero_s": 0.0
+   },
+   {
+    "order": 101,
+    "sys_hw": "PX4_FMU_V6C",
+    "mav_type": "Quadrotor",
+    "release": "v1.17.0 255",
+    "r_internal": -1.0,
+    "onset_phase": "airborne",
+    "onset_current_a": 2.822,
+    "onset_s_from_takeoff": 4.6,
+    "log_start_phase": "armed on ground",
+    "first_zero_s": 4.2
+   },
+   {
+    "order": 166,
+    "sys_hw": "PX4_FMU_V6C",
+    "mav_type": "Two-rotor VTOL (Tailsitter)",
+    "release": "v1.17.0 64",
+    "r_internal": -1.0,
+    "onset_phase": "before the log",
+    "onset_current_a": null,
+    "onset_s_from_takeoff": null,
+    "log_start_phase": "armed on ground",
+    "first_zero_s": 0.0
+   },
+   {
+    "order": 184,
+    "sys_hw": "MICOAIR_H743_V2",
+    "mav_type": "Quadrotor",
+    "release": "v1.16.1 192",
+    "r_internal": -1.0,
+    "onset_phase": "airborne",
+    "onset_current_a": 16.456,
+    "onset_s_from_takeoff": 74.4,
+    "log_start_phase": "armed on ground",
+    "first_zero_s": 74.4
+   },
+   {
+    "order": 188,
+    "sys_hw": "PX4_FMU_V5",
+    "mav_type": "Quadrotor",
+    "release": "v1.17.0 255",
+    "r_internal": -1.0,
+    "onset_phase": "armed on ground",
+    "onset_current_a": 2.989,
+    "onset_s_from_takeoff": -4.4,
+    "log_start_phase": "disarmed",
+    "first_zero_s": 0.0
+   }
+  ]
+ },
+ "list": {
+  "listed": 488578,
+  "eligible": 65699,
+  "excluded": {
+   "shorter than 120 s": 195108,
+   "simulation": 37056,
+   "older than v1.15": 40261,
+   "before 2025-01-01": 150454
+  },
+  "by_kind": {
+   "pre": 15046,
+   "release": 31019,
+   "dev": 19568,
+   "unknown": 66
+  },
+  "candidates_before_skip": 65699,
+  "first_pass_vehicles_skipped": 219,
+  "candidates": 63340,
+  "candidate_vehicles": 10072
+ },
+ "pass": {
+  "requested": 225,
+  "downloaded": 150,
+  "stop": "max full logs"
+ },
+ "wall_s": 1750.8
+}
