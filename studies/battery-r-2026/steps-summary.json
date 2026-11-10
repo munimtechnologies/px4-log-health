@@ -1,0 +1,563 @@
+{
+ "steps": "0.1.0",
+ "onset": "0.1.0",
+ "battr_logs": "0.1.0",
+ "predictions": {
+  "S1": true,
+  "S2": true,
+  "S3": true,
+  "S4": null
+ },
+ "reported": {
+  "measurable": 65,
+  "with_r": 65,
+  "collapsed": 6,
+  "at_takeoff": 5,
+  "at_takeoff_with_r": 5,
+  "at_takeoff_flat": 4,
+  "at_takeoff_flat_share": 0.8,
+  "at_takeoff_r": [
+   -0.2247,
+   0.037,
+   0.3936,
+   0.4115,
+   0.6165
+  ],
+  "at_takeoff_valid": 0,
+  "alive_with_r": 59,
+  "alive_flat": 8,
+  "alive_flat_share": 0.1356,
+  "alive_valid": 28,
+  "flat": 12,
+  "flat_collapsed": 4,
+  "flat_collapsed_share": 0.3333,
+  "steep": 53,
+  "steep_collapsed": 2,
+  "steep_collapsed_share": 0.0377,
+  "later": 1,
+  "later_valid": 1,
+  "later_valid_share": 1.0,
+  "later_r": [
+   -0.3405
+  ],
+  "later_first_zero_s": [
+   0.2
+  ],
+  "collapsed_rows": [
+   {
+    "order": 36,
+    "log_id": "2129b3f4-73c7-4972-87c1-f3eb601bebdf",
+    "sys_hw": "CUAV_X7PRO",
+    "mav_type": "VTOL Standard",
+    "release": "v1.16.1 192",
+    "r_internal": -1.0,
+    "first_zero_s": 0.2,
+    "onset_phase": "airborne",
+    "onset_current_a": 0.0,
+    "step": {
+     "pairs": 7484,
+     "range_a": 36.301,
+     "r": -0.3405,
+     "mohm_per_cell": 0.119
+    },
+    "step_valid": true
+   },
+   {
+    "order": 42,
+    "log_id": "33010abd-7f26-4c33-832d-7fd0d49ec390",
+    "sys_hw": "PX4_FMU_V6C",
+    "mav_type": "Quadrotor",
+    "release": "v1.17.0 255",
+    "r_internal": -1.0,
+    "first_zero_s": 0.0,
+    "onset_phase": "airborne",
+    "onset_current_a": 8.122,
+    "step": {
+     "pairs": 586,
+     "range_a": 33.03,
+     "r": 0.037,
+     "mohm_per_cell": -1.034
+    },
+    "step_valid": false
+   },
+   {
+    "order": 112,
+    "log_id": "f31b9419-8069-4a43-a49d-da35fd989244",
+    "sys_hw": "CUAV_7_NANO",
+    "mav_type": "Fixed Wing",
+    "release": "v1.17.0 255",
+    "r_internal": -1.0,
+    "first_zero_s": 0.0,
+    "onset_phase": "armed on ground",
+    "onset_current_a": 9.785,
+    "step": {
+     "pairs": 2499,
+     "range_a": 18.954,
+     "r": -0.2247,
+     "mohm_per_cell": 16.634
+    },
+    "step_valid": false
+   },
+   {
+    "order": 162,
+    "log_id": "54c755d2-6816-45c6-abac-f031cd0e908f",
+    "sys_hw": "PX4_FMU_V6C",
+    "mav_type": "Quadrotor",
+    "release": "v1.17.0 255",
+    "r_internal": -1.0,
+    "first_zero_s": 0.0,
+    "onset_phase": "armed on ground",
+    "onset_current_a": 0.443,
+    "step": {
+     "pairs": 3284,
+     "range_a": 3.325,
+     "r": 0.4115,
+     "mohm_per_cell": -36.03
+    },
+    "step_valid": false
+   },
+   {
+    "order": 210,
+    "log_id": "213cebe4-d01f-402d-a0c1-32413c8a1572",
+    "sys_hw": "CUBEPILOT_CUBEORANGEPLUS",
+    "mav_type": "Quadrotor",
+    "release": "v1.17.0 255",
+    "r_internal": -1.0,
+    "first_zero_s": 0.0,
+    "onset_phase": "before the log",
+    "onset_current_a": null,
+    "step": {
+     "pairs": 417,
+     "range_a": 2.746,
+     "r": 0.6165,
+     "mohm_per_cell": -67.052
+    },
+    "step_valid": false
+   },
+   {
+    "order": 223,
+    "log_id": "4749ce54-67a0-469b-9d27-54aaf7f1c6ad",
+    "sys_hw": "CUBEPILOT_CUBEORANGE",
+    "mav_type": "Quadrotor",
+    "release": "v1.17.0 255",
+    "r_internal": -1.0,
+    "first_zero_s": 0.0,
+    "onset_phase": "before the log",
+    "onset_current_a": null,
+    "step": {
+     "pairs": 2669,
+     "range_a": 0.091,
+     "r": 0.3936,
+     "mohm_per_cell": -343.245
+    },
+    "step_valid": false
+   }
+  ]
+ },
+ "held_out": {
+  "predictions": {
+   "H1": false,
+   "H2": true,
+   "H3": true,
+   "H4": true
+  },
+  "reported": {
+   "measurable": 75,
+   "with_r": 75,
+   "collapsed": 10,
+   "at_takeoff": 7,
+   "at_takeoff_with_r": 7,
+   "at_takeoff_flat": 2,
+   "at_takeoff_flat_share": 0.2857,
+   "at_takeoff_r": [
+    -0.8305,
+    -0.6229,
+    -0.2567,
+    -0.1937,
+    -0.1551,
+    0.0233,
+    0.1002
+   ],
+   "at_takeoff_valid": 1,
+   "alive_with_r": 65,
+   "alive_flat": 9,
+   "alive_flat_share": 0.1385,
+   "alive_valid": 46,
+   "flat": 12,
+   "flat_collapsed": 3,
+   "flat_collapsed_share": 0.25,
+   "steep": 63,
+   "steep_collapsed": 7,
+   "steep_collapsed_share": 0.1111,
+   "later": 3,
+   "later_valid": 2,
+   "later_valid_share": 0.6667,
+   "later_r": [
+    -0.7602,
+    -0.4926,
+    0.0129
+   ],
+   "later_first_zero_s": [
+    2.4,
+    6.4,
+    15.2
+   ],
+   "collapsed_rows": [
+    {
+     "order": 3,
+     "log_id": "026bcfd6-de20-4069-b3cd-e15a4a21a66f",
+     "sys_hw": "PX4_FMU_V6C",
+     "mav_type": "Hexarotor",
+     "release": "v1.16.2 255",
+     "r_internal": 0.005,
+     "first_zero_s": 0.0,
+     "onset_phase": null,
+     "onset_current_a": null,
+     "step": {
+      "pairs": 744,
+      "range_a": 23.263,
+      "r": -0.6229,
+      "mohm_per_cell": 3.883
+     },
+     "step_valid": true
+    },
+    {
+     "order": 4,
+     "log_id": "03ce3cc6-db48-4134-b571-d98d4b03d3e4",
+     "sys_hw": "MICOAIR_H743_V2",
+     "mav_type": "Quadrotor",
+     "release": "v1.16.1 192",
+     "r_internal": -1.0,
+     "first_zero_s": 6.4,
+     "onset_phase": null,
+     "onset_current_a": null,
+     "step": {
+      "pairs": 1723,
+      "range_a": 25.168,
+      "r": -0.4926,
+      "mohm_per_cell": 2.107
+     },
+     "step_valid": true
+    },
+    {
+     "order": 69,
+     "log_id": "0d352749-1251-4136-821d-98f2df249102",
+     "sys_hw": "MICOAIR_H743_V2",
+     "mav_type": "Quadrotor",
+     "release": "v1.17.0 255",
+     "r_internal": -1.0,
+     "first_zero_s": 0.0,
+     "onset_phase": null,
+     "onset_current_a": null,
+     "step": {
+      "pairs": 3969,
+      "range_a": 16.474,
+      "r": 0.1002,
+      "mohm_per_cell": -0.041
+     },
+     "step_valid": false
+    },
+    {
+     "order": 82,
+     "log_id": "98a3a7e6-0fc0-4fb9-b0dc-6f5cda58559e",
+     "sys_hw": "CUAV_7_NANO",
+     "mav_type": "Fixed Wing",
+     "release": "v1.17.0 255",
+     "r_internal": -1.0,
+     "first_zero_s": 0.0,
+     "onset_phase": null,
+     "onset_current_a": null,
+     "step": {
+      "pairs": 4557,
+      "range_a": 25.94,
+      "r": -0.2567,
+      "mohm_per_cell": 12.86
+     },
+     "step_valid": false
+    },
+    {
+     "order": 99,
+     "log_id": "21ba8bf2-90cc-4feb-bee6-538d28050e21",
+     "sys_hw": "HOLYBRO_KAKUTEH7",
+     "mav_type": "Quadrotor",
+     "release": "v1.17.0 255",
+     "r_internal": -1.0,
+     "first_zero_s": 15.2,
+     "onset_phase": null,
+     "onset_current_a": null,
+     "step": {
+      "pairs": 1163,
+      "range_a": 24.413,
+      "r": -0.7602,
+      "mohm_per_cell": 8.728
+     },
+     "step_valid": true
+    },
+    {
+     "order": 139,
+     "log_id": "05627ba7-317d-45fc-a2da-1d31d6efd575",
+     "sys_hw": "MICOAIR_H743_V2",
+     "mav_type": "Quadrotor",
+     "release": "v1.16.2 255",
+     "r_internal": -1.0,
+     "first_zero_s": 2.4,
+     "onset_phase": null,
+     "onset_current_a": null,
+     "step": {
+      "pairs": 685,
+      "range_a": 8.498,
+      "r": 0.0129,
+      "mohm_per_cell": -0.035
+     },
+     "step_valid": false
+    },
+    {
+     "order": 155,
+     "log_id": "4390e1c0-5e3a-4305-8aba-71061264abea",
+     "sys_hw": "PX4_FMU_V6C",
+     "mav_type": "Quadrotor",
+     "release": "v1.17.0 255",
+     "r_internal": -1.0,
+     "first_zero_s": 0.0,
+     "onset_phase": null,
+     "onset_current_a": null,
+     "step": {
+      "pairs": 616,
+      "range_a": 6.542,
+      "r": 0.0233,
+      "mohm_per_cell": -1.014
+     },
+     "step_valid": false
+    },
+    {
+     "order": 157,
+     "log_id": "453bd502-29bf-4b79-970f-bcff99f3601f",
+     "sys_hw": "PX4_FMU_V6C",
+     "mav_type": "Quadrotor",
+     "release": "v1.16.0 255",
+     "r_internal": -1.0,
+     "first_zero_s": 0.0,
+     "onset_phase": null,
+     "onset_current_a": null,
+     "step": {
+      "pairs": 1017,
+      "range_a": 7.481,
+      "r": -0.1551,
+      "mohm_per_cell": 1.673
+     },
+     "step_valid": false
+    },
+    {
+     "order": 169,
+     "log_id": "6c2e6787-978b-494f-afa8-9407b1b9876e",
+     "sys_hw": "PX4_FMU_V6C",
+     "mav_type": "Quadrotor",
+     "release": "v1.16.2 255",
+     "r_internal": -1.0,
+     "first_zero_s": 0.0,
+     "onset_phase": null,
+     "onset_current_a": null,
+     "step": {
+      "pairs": 1310,
+      "range_a": 2.36,
+      "r": -0.1937,
+      "mohm_per_cell": 13.241
+     },
+     "step_valid": false
+    },
+    {
+     "order": 189,
+     "log_id": "cbc41b10-5653-4d13-9206-429b67c420c5",
+     "sys_hw": "CUAV_X25_EVO",
+     "mav_type": "Hexarotor",
+     "release": "v1.17.0 0",
+     "r_internal": -1.0,
+     "first_zero_s": 0.0,
+     "onset_phase": null,
+     "onset_current_a": null,
+     "step": {
+      "pairs": 579,
+      "range_a": 3.288,
+      "r": -0.8305,
+      "mohm_per_cell": 2.156
+     },
+     "step_valid": false
+    }
+   ]
+  }
+ },
+ "onset_style": {
+  "onset": "0.1.0",
+  "battr_logs": "0.1.0",
+  "predictions": {
+   "O1": true,
+   "O2": true,
+   "O3": false,
+   "O4": true
+  },
+  "reported": {
+   "requests": 237,
+   "status_counts": {
+    "estimate field": 150,
+    "no estimate field": 71,
+    "too big": 16
+   },
+   "downloaded": 150,
+   "read_ok": 139,
+   "measurable": 65,
+   "why_not": {
+    "no active estimator with valid current": 58,
+    "median airborne current under 0.5 A": 10,
+    "fewer than 150 airborne samples": 6
+   },
+   "collapsed": 6,
+   "collapsed_share": 0.0923,
+   "before_takeoff": 4,
+   "before_takeoff_share": 0.6667,
+   "onset_phases": {
+    "airborne": 2,
+    "armed on ground": 2,
+    "before the log": 2
+   },
+   "onset_currents_a": [
+    0.0,
+    0.443,
+    8.122,
+    9.785
+   ],
+   "onset_current_median_a": 4.282,
+   "onset_s_from_takeoff": [
+    -1.6,
+    -0.6,
+    1.4,
+    81.4
+   ],
+   "log_start_phases": {
+    "armed on ground": 58,
+    "unknown": 6,
+    "disarmed": 1
+   },
+   "o4_pairs": 28,
+   "spearman_r_end_vs_step": 0.6725,
+   "r_end_mohm_alive_quantiles": {
+    "n": 59,
+    "p10": 0.3867,
+    "p25": 2.0391,
+    "median": 3.5432,
+    "p75": 6.3057,
+    "p90": 8.4003,
+    "max": 18.0412
+   },
+   "r_internal_counts": {
+    "-1.0": 60,
+    "0.005": 2,
+    "0.0": 1,
+    "0.0012": 1,
+    "0.0134": 1
+   },
+   "collapsed_by_r_internal": {
+    "-1.0": 6
+   },
+   "collapsed_rows": [
+    {
+     "order": 36,
+     "sys_hw": "CUAV_X7PRO",
+     "mav_type": "VTOL Standard",
+     "release": "v1.16.1 192",
+     "r_internal": -1.0,
+     "onset_phase": "airborne",
+     "onset_current_a": 0.0,
+     "onset_s_from_takeoff": 81.4,
+     "log_start_phase": "armed on ground",
+     "first_zero_s": 0.2
+    },
+    {
+     "order": 42,
+     "sys_hw": "PX4_FMU_V6C",
+     "mav_type": "Quadrotor",
+     "release": "v1.17.0 255",
+     "r_internal": -1.0,
+     "onset_phase": "airborne",
+     "onset_current_a": 8.122,
+     "onset_s_from_takeoff": 1.4,
+     "log_start_phase": "armed on ground",
+     "first_zero_s": 0.0
+    },
+    {
+     "order": 112,
+     "sys_hw": "CUAV_7_NANO",
+     "mav_type": "Fixed Wing",
+     "release": "v1.17.0 255",
+     "r_internal": -1.0,
+     "onset_phase": "armed on ground",
+     "onset_current_a": 9.785,
+     "onset_s_from_takeoff": -0.6,
+     "log_start_phase": "armed on ground",
+     "first_zero_s": 0.0
+    },
+    {
+     "order": 162,
+     "sys_hw": "PX4_FMU_V6C",
+     "mav_type": "Quadrotor",
+     "release": "v1.17.0 255",
+     "r_internal": -1.0,
+     "onset_phase": "armed on ground",
+     "onset_current_a": 0.443,
+     "onset_s_from_takeoff": -1.6,
+     "log_start_phase": "armed on ground",
+     "first_zero_s": 0.0
+    },
+    {
+     "order": 210,
+     "sys_hw": "CUBEPILOT_CUBEORANGEPLUS",
+     "mav_type": "Quadrotor",
+     "release": "v1.17.0 255",
+     "r_internal": -1.0,
+     "onset_phase": "before the log",
+     "onset_current_a": null,
+     "onset_s_from_takeoff": null,
+     "log_start_phase": "armed on ground",
+     "first_zero_s": 0.0
+    },
+    {
+     "order": 223,
+     "sys_hw": "CUBEPILOT_CUBEORANGE",
+     "mav_type": "Quadrotor",
+     "release": "v1.17.0 255",
+     "r_internal": -1.0,
+     "onset_phase": "before the log",
+     "onset_current_a": null,
+     "onset_s_from_takeoff": null,
+     "log_start_phase": "armed on ground",
+     "first_zero_s": 0.0
+    }
+   ]
+  }
+ },
+ "list": {
+  "listed": 488578,
+  "eligible": 65699,
+  "excluded": {
+   "shorter than 120 s": 195108,
+   "simulation": 37056,
+   "older than v1.15": 40261,
+   "before 2025-01-01": 150454
+  },
+  "by_kind": {
+   "pre": 15046,
+   "release": 31019,
+   "dev": 19568,
+   "unknown": 66
+  },
+  "candidates_before_skip": 65699,
+  "earlier_vehicles_skipped": 444,
+  "candidates": 61406,
+  "candidate_vehicles": 9847
+ },
+ "pass": {
+  "requested": 237,
+  "downloaded": 150,
+  "stop": "max full logs"
+ },
+ "wall_s": 1908.9
+}
