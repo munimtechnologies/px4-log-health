@@ -29,6 +29,13 @@ compass the estimator used moves with battery current in flight, placed
 against 63 measurable public flights of the magcurrent-2026 census
 (studies/magcurrent-2026/GRADE.md). Strong coupling is a flag.
 
+When battery_r.py sits next to this file (it is in the repo and the skill),
+a Battery section follows (0.3.9): whether PX4's online battery-resistance
+estimate collapsed to 0 in flight, which leaves the state of charge
+uncorrected for load when BAT1_R_INTERNAL is -1. It comes from the
+battery-r-2026 census (studies/battery-r-2026/GRADE.md). A collapse is a
+note, not a flag, and no resistance value is suggested.
+
     python checkup.py flight.ulg [more.ulg ...] [--md report.md] [--json rows.jsonl] [--fail-on-flag]
 
 Markdown goes to --md (appended, so it can be $GITHUB_STEP_SUMMARY) or to
@@ -51,7 +58,7 @@ import sys
 
 import health
 
-__version__ = "0.3.8"
+__version__ = "0.3.9"
 
 OFF_MS = 50.0           # px4-gps-lag rule D1: suggest only when the lag is this far off the delay EKF2 assumed
 NEAR_MS = 40.0          # within OFF_MS but this close to it: say so, with one decimal
@@ -143,6 +150,20 @@ def run_compass(path):
     except Exception as exc:  # a log without the topics, or unreadable
         return {"compass": getattr(compass, "__version__", None), "level": "not checked",
                 "text": "Compass not checked: %s: %s." % (type(exc).__name__, str(exc)[:200])}
+
+
+def run_battery(path):
+    """battery_r.py's check of one log (studies/battery-r-2026), or a 'not checked' result."""
+    try:
+        import battery_r
+    except ImportError:
+        return {"level": "not checked",
+                "text": "Battery resistance estimate not checked: battery_r.py not found next to checkup.py."}
+    try:
+        return battery_r.check(path)
+    except Exception as exc:  # a log without the topics, or unreadable
+        return {"battery_r": getattr(battery_r, "__version__", None), "level": "not checked",
+                "text": "Battery resistance estimate not checked: %s: %s." % (type(exc).__name__, str(exc)[:200])}
 
 
 def read_delay_inputs(path):
@@ -325,7 +346,7 @@ def check(path, baseline):
             g["lag"] = dict(lag, passed=False, reason="%s (%s)" % (NEW_TOPIC_REASON, lag.get("reason", "not run")))
         verdict = gps_verdict(g.get("lag"), g.get("innov"), applied)
     return {"log": path, "checkup": __version__, "health": h, "gps": g, "gps_verdict": verdict,
-            "gps_dynmodel": dynmodel_info(inputs), "compass": run_compass(path)}
+            "gps_dynmodel": dynmodel_info(inputs), "compass": run_compass(path), "battery": run_battery(path)}
 
 
 def _num(x, spec="%.1f"):
@@ -470,6 +491,10 @@ def render(r):
     if c:
         text = c.get("text") or "Compass not checked."
         lines += ["### Compass", "", ("**Flag:** " + text) if c.get("level") == "flag" else text, ""]
+    b = r.get("battery")
+    if b:
+        text = b.get("text") or "Battery resistance estimate not checked."
+        lines += ["### Battery", "", ("**Note:** " + text) if b.get("level") == "note" else text, ""]
     return "\n".join(lines)
 
 

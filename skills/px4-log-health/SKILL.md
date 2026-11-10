@@ -1,6 +1,6 @@
 ---
 name: px4-log-health
-description: Use when a user has a PX4 flight log (.ulg) and asks whether the flight was healthy, or asks about vibration, accelerometer clipping, GPS jamming or spoofing, battery warnings, failsafe, motor saturation, compass interference from motor current (CAL_MAG_COMP_TYP, compass power compensation), GPS delay (EKF2_GPS_DELAY, SENS_GPS0_DELAY, SENS_GNSS0_DELAY, DroneCAN GPS timing) or the u-blox GPS_UBX_DYNMODEL setting. Runs the open-source px4-log-health checkup, bundled in this skill's scripts/ folder, on the user's own machine (nothing is uploaded, no position is read) and explains its report - Flight Review's vibration bands, each figure's place among public flights, the GPS lag measured from the flight against the delay EKF2 applied, and how much the compass follows battery current. PX4 only; not for ArduPilot .bin/.log files.
+description: Use when a user has a PX4 flight log (.ulg) and asks whether the flight was healthy, or asks about vibration, accelerometer clipping, GPS jamming or spoofing, battery warnings, a state of charge that drops under load and recovers after landing (BAT1_R_INTERNAL, PX4's battery internal-resistance estimate), failsafe, motor saturation, compass interference from motor current (CAL_MAG_COMP_TYP, compass power compensation), GPS delay (EKF2_GPS_DELAY, SENS_GPS0_DELAY, SENS_GNSS0_DELAY, DroneCAN GPS timing) or the u-blox GPS_UBX_DYNMODEL setting. Runs the open-source px4-log-health checkup, bundled in this skill's scripts/ folder, on the user's own machine (nothing is uploaded, no position is read) and explains its report - Flight Review's vibration bands, each figure's place among public flights, the GPS lag measured from the flight against the delay EKF2 applied, how much the compass follows battery current, and whether PX4's battery-resistance estimate collapsed to zero. PX4 only; not for ArduPilot .bin/.log files.
 license: Apache-2.0
 ---
 
@@ -27,13 +27,16 @@ report per log, plus one JSON line per log. For the time the vehicle was in the 
 - a **note on u-blox dynamic model 6** when a serial u-blox receiver runs
   `GPS_UBX_DYNMODEL` = 6;
 - a **compass check**: how much the magnetic field strength of the compass the estimator used
-  follows the battery current in flight, placed among 63 measurable public PX4 flights.
+  follows the battery current in flight, placed among 63 measurable public PX4 flights;
+- a **battery check**: whether PX4's online battery-resistance estimate collapsed to 0 in flight,
+  and whether PX4 was using it to correct the state of charge for load.
 
 ## When to use
 
 - The user shares or names a `.ulg` file and asks "was this flight OK?", "why did it drift /
   toilet-bowl / reject GPS?", "is my vibration too high?", "is my compass affected by the
-  motors?", or similar.
+  motors?", "why does my battery percentage drop under load and come back after landing?", or
+  similar.
 - The user asks what `EKF2_GPS_DELAY` / `SENS_GPS0_DELAY` / `SENS_GNSS0_DELAY` should be for
   their vehicle, whether their DroneCAN GPS is timed right, or whether to change
   `GPS_UBX_DYNMODEL`.
@@ -49,10 +52,10 @@ the checker in the tab with nothing uploaded: https://munimv2.github.io/px4-log-
 ## Step 1: install the two Python packages it needs
 
 The checker itself is already here, in this skill's `scripts/` folder (next to this SKILL.md):
-`checkup.py`, `health.py`, `compass.py` and `baseline.json` from px4-log-health v0.3.8, and
-`gps_lag.py` and `innov.py` from px4-gps-lag 0.2.0. `scripts/SOURCES.json` lists where each file
-came from and its sha256. Nothing else is downloaded. It needs Python 3 and two packages from
-PyPI; use a virtual environment if the user prefers.
+`checkup.py`, `health.py`, `compass.py`, `battery_r.py` and `baseline.json` from px4-log-health
+v0.3.9, and `gps_lag.py` and `innov.py` from px4-gps-lag 0.2.0. `scripts/SOURCES.json` lists where
+each file came from and its sha256. Nothing else is downloaded. It needs Python 3 and two packages
+from PyPI; use a virtual environment if the user prefers.
 
 ```
 pip install numpy pyulog
@@ -70,7 +73,7 @@ python scripts/checkup.py path/to/flight.ulg --md report.md --json rows.jsonl
 - Several logs at once: `python scripts/checkup.py a.ulg b.ulg c.ulg --md report.md --json rows.jsonl`.
 - Without `--md` the report goes to stdout. `--md` appends to an existing file.
 - `--fail-on-flag` makes the exit code 1 when any log raises a flag (a compass flag included) or
-  gets a suggested GPS delay (for CI). Without it, flags and suggestions don't change the exit
+  gets a suggested GPS delay (for CI). Notes, such as the battery note, don't change the exit
   code.
 - The checker reads the log locally and reads no position; nothing is sent anywhere.
 
@@ -114,8 +117,9 @@ user that changing `SENS_GPSn_DELAY` / `SENS_GNSSn_DELAY` would not change anyth
 receiver. The same holds for `PPS or GPS driver`. If such a log is more than 50 ms off, the report
 gives no value to try; suggest looking at the flight in EKF2 log replay and checking the
 receiver's own timing settings with its maker. Whether DroneCAN receivers' self-reported delay
-usually covers their lag is open: px4-gps-lag's pre-registered test found too few public logs
-to grade it (`studies/dronecan-2026/GRADE-ext.md`), so don't claim it does or doesn't.
+usually covers their lag is open: px4-gps-lag's pre-registered tests found too few public logs
+to grade it (`studies/dronecan-2026/GRADE-ext.md`, `GRADE-nodefw.md`), so don't claim it does or
+doesn't.
 
 **u-blox dynamic model 6.** When the report ends its GPS section with "u-blox dynamic model
 6", the receiver runs `GPS_UBX_DYNMODEL` = 6 (airborne <1g), PX4's multicopter default up to
@@ -124,10 +128,10 @@ model 7, and the extra lag behaved like heavier smoothing, which no single delay
 cancels. The report suggests trying model 7 (it takes effect after a reboot) and measuring
 again. It is a note, not a flag. In the JSON it is `gps_dynmodel` (`value`, `note`).
 
-**Compass.** The last section, and the JSON field `compass` (`level`, `coupling_pct`, `class`,
-`fleet_place`, `cal_mag_comp_typ`, `measure`), says how far the field strength of the compass
-the estimator used moved over the flight's battery current range, as a percentage, and where
-that sits among 63 measurable public PX4 flights (median 3.7%, 90th percentile 21.6%):
+**Compass.** The Compass section, and the JSON field `compass` (`level`, `coupling_pct`,
+`class`, `fleet_place`, `cal_mag_comp_typ`, `measure`), says how far the field strength of the
+compass the estimator used moved over the flight's battery current range, as a percentage, and
+where that sits among 63 measurable public PX4 flights (median 3.7%, 90th percentile 21.6%):
 
 - `flag` (strong: 10% or more with |r| 0.5 or more; 17% of those flights): motor current is
   likely bending the compass. Point the user to PX4's Compass Power Compensation guide
@@ -142,13 +146,30 @@ Say that a badly calibrated compass also changes its strength with attitude, and
 manoeuvres draw more current, so a strong coupling can partly be calibration error; a compass
 recalibration and a look at the plot come before any hardware change.
 
+**Battery.** The last section, and the JSON field `battery` (`level`, `collapsed`,
+`r_end_mohm`, `bat_r_internal`, `measure`), says whether PX4's online battery-resistance
+estimate (`battery_status.internal_resistance_estimate`) was 0 for the whole second half of the
+flight:
+
+- `note`: it collapsed while `BAT1_R_INTERNAL` is -1, so PX4 did not correct the voltage-based
+  state of charge for load; the percentage reads low under load and recovers after landing. On
+  public PX4 flights this happened on 9 of 53 that use the estimate, and in most of them the
+  estimate was already 0 at takeoff. Tell the user it can also come from a wrong current-sensor
+  scale or offset, and point them to PX4's battery estimation guide
+  (https://docs.px4.io/main/en/config/battery) and to the battery plots in Flight Review. Do not
+  suggest a resistance value.
+- `ok`: the estimate did not collapse (its final value is given against public flights: median
+  2.7 mOhm per cell), or it collapsed but `BAT1_R_INTERNAL` is set, so PX4 used the set value.
+- `not checked`: no running estimator (smart or DroneCAN batteries, or PX4 older than v1.15), no
+  valid current, or under 30 s in the air.
+
 Never tell the user a vehicle is safe or unsafe to fly on the strength of this report.
 
 ## In CI (GitHub Action)
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: munimtechnologies/px4-log-health@v0.3.8
+- uses: munimtechnologies/px4-log-health@v0.3.9
   with:
     logs: "**/*.ulg"          # space-separated globs
     fail-on-flag: "false"     # "true" fails the step on any flag or suggestion
@@ -162,6 +183,8 @@ The report lands in the job summary, and one JSON line per log in `px4-log-healt
   (`studies/fleet-health-2026/GRADE.md`, pre-registered).
 - Compass figures: 63 measurable of 150 public Flight Review logs, one per vehicle
   (`studies/magcurrent-2026/GRADE.md`, pre-registered).
+- Battery figures: 75 measurable of 150 public Flight Review logs, one per vehicle
+  (`studies/battery-r-2026/GRADE.md`, pre-registered).
 - GPS lag method and fleet figures: px4-gps-lag (`studies/fleet-2026`,
   `studies/mismatch-2026`, `studies/dynmodel-2026`, `studies/gnss-2026`), each pre-registered
   before data was read.

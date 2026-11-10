@@ -27,7 +27,7 @@ def report(compass=None):
 
 class Version(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(checkup.__version__, "0.3.8")
+        self.assertEqual(checkup.__version__, "0.3.9")
 
 
 class Render(unittest.TestCase):

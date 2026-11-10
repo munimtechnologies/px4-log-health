@@ -1,0 +1,752 @@
+--- a/checkup.py
++++ b/checkup.py
+@@ -29,6 +29,13 @@
+ against 63 measurable public flights of the magcurrent-2026 census
+ (studies/magcurrent-2026/GRADE.md). Strong coupling is a flag.
+ 
++When battery_r.py sits next to this file (it is in the repo and the skill),
++a Battery section follows (0.3.9): whether PX4's online battery-resistance
++estimate collapsed to 0 in flight, which leaves the state of charge
++uncorrected for load when BAT1_R_INTERNAL is -1. It comes from the
++battery-r-2026 census (studies/battery-r-2026/GRADE.md). A collapse is a
++note, not a flag, and no resistance value is suggested.
++
+     python checkup.py flight.ulg [more.ulg ...] [--md report.md] [--json rows.jsonl] [--fail-on-flag]
+ 
+ Markdown goes to --md (appended, so it can be $GITHUB_STEP_SUMMARY) or to
+@@ -51,7 +58,7 @@
+ 
+ import health
+ 
+-__version__ = "0.3.8"
++__version__ = "0.3.9"
+ 
+ OFF_MS = 50.0           # px4-gps-lag rule D1: suggest only when the lag is this far off the delay EKF2 assumed
+ NEAR_MS = 40.0          # within OFF_MS but this close to it: say so, with one decimal
+@@ -145,6 +152,20 @@
+                 "text": "Compass not checked: %s: %s." % (type(exc).__name__, str(exc)[:200])}
+ 
+ 
++def run_battery(path):
++    """battery_r.py's check of one log (studies/battery-r-2026), or a 'not checked' result."""
++    try:
++        import battery_r
++    except ImportError:
++        return {"level": "not checked",
++                "text": "Battery resistance estimate not checked: battery_r.py not found next to checkup.py."}
++    try:
++        return battery_r.check(path)
++    except Exception as exc:  # a log without the topics, or unreadable
++        return {"battery_r": getattr(battery_r, "__version__", None), "level": "not checked",
++                "text": "Battery resistance estimate not checked: %s: %s." % (type(exc).__name__, str(exc)[:200])}
++
++
+ def read_delay_inputs(path):
+     """What applied_delay needs from one ULog: the initial parameters and, of
+     the first GNSS topic present, the driver's time stamps, the corrected
+@@ -325,7 +346,7 @@
+             g["lag"] = dict(lag, passed=False, reason="%s (%s)" % (NEW_TOPIC_REASON, lag.get("reason", "not run")))
+         verdict = gps_verdict(g.get("lag"), g.get("innov"), applied)
+     return {"log": path, "checkup": __version__, "health": h, "gps": g, "gps_verdict": verdict,
+-            "gps_dynmodel": dynmodel_info(inputs), "compass": run_compass(path)}
++            "gps_dynmodel": dynmodel_info(inputs), "compass": run_compass(path), "battery": run_battery(path)}
+ 
+ 
+ def _num(x, spec="%.1f"):
+@@ -470,6 +491,10 @@
+     if c:
+         text = c.get("text") or "Compass not checked."
+         lines += ["### Compass", "", ("**Flag:** " + text) if c.get("level") == "flag" else text, ""]
++    b = r.get("battery")
++    if b:
++        text = b.get("text") or "Battery resistance estimate not checked."
++        lines += ["### Battery", "", ("**Note:** " + text) if b.get("level") == "note" else text, ""]
+     return "\n".join(lines)
+ 
+ 
+--- a/test_checkup_dynmodel.py
++++ b/test_checkup_dynmodel.py
+@@ -37,7 +37,7 @@
+ 
+ class Info(unittest.TestCase):
+     def test_version(self):
+-        self.assertEqual(checkup.__version__, "0.3.8")
++        self.assertEqual(checkup.__version__, "0.3.9")
+ 
+     def test_device_id_layout(self):
+         self.assertEqual(F9P_SERIAL & 0x7, 5)
+--- a/test_checkup_037.py
++++ b/test_checkup_037.py
+@@ -43,7 +43,7 @@
+ 
+ class Version(unittest.TestCase):
+     def test_version(self):
+-        self.assertEqual(checkup.__version__, "0.3.8")
++        self.assertEqual(checkup.__version__, "0.3.9")
+ 
+ 
+ class DroneCAN(unittest.TestCase):
+--- a/test_checkup_038.py
++++ b/test_checkup_038.py
+@@ -27,7 +27,7 @@
+ 
+ class Version(unittest.TestCase):
+     def test_version(self):
+-        self.assertEqual(checkup.__version__, "0.3.8")
++        self.assertEqual(checkup.__version__, "0.3.9")
+ 
+ 
+ class Render(unittest.TestCase):
+--- a/README.md
++++ b/README.md
+@@ -24,7 +24,7 @@
+ 
+ `checkup.py` turns each log into a short Markdown report: the flags, a table of every figure with its place among 208 public flights, and a **GPS delay** verdict. The verdict measures how far the GPS lags the IMU with [px4-gps-lag](https://github.com/munimtechnologies/px4-gps-lag), compares that with the delay EKF2 assumed, and checks the direction against EKF2's own GPS velocity innovations. It suggests a new delay only when the measured lag is more than 50 ms off and the innovations don't point the other way. That is the rule px4-gps-lag's fleet studies support ([GRADE-innov-confirm.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/fleet-2026/GRADE-innov-confirm.md)). A suggested value is a starting point to check with EKF2 log replay, not a setting to fly.
+ 
+-The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change. When a serial u-blox receiver runs `GPS_UBX_DYNMODEL` 6, the report adds one line about it (see 0.3.4 to 0.3.6 below). The report ends with a compass check: how much the compass follows the battery current (see 0.3.8 below).
++The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change. When a serial u-blox receiver runs `GPS_UBX_DYNMODEL` 6, the report adds one line about it (see 0.3.4 to 0.3.6 below). The report ends with a compass check: how much the compass follows the battery current (see 0.3.8 below), then a battery check: whether PX4's battery-resistance estimate collapsed to 0 in flight (see 0.3.9 below).
+ 
+ ```
+ pip install numpy pyulog requests
+@@ -54,7 +54,7 @@
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+-      - uses: munimtechnologies/px4-log-health@v0.3.8
++      - uses: munimtechnologies/px4-log-health@v0.3.9
+         with:
+           logs: "**/*.ulg"          # space-separated globs
+           fail-on-flag: "false"     # "true" fails the step on any flag or suggestion
+@@ -73,6 +73,45 @@
+ ```
+ 
+ The skill only runs the checker locally; it sends no log anywhere.
++
++## What changed in 0.3.9: a battery check
++
++- **Did PX4's battery-resistance estimate collapse?** Since PX4 PR #23205, PX4 estimates the
++  pack's internal resistance in flight and, when `BAT1_R_INTERNAL` is -1 (the default), uses it to
++  correct the voltage-based state of charge for the voltage drop under load. A negative estimate
++  is published as 0, and then no correction is made. The pre-registered census
++  [battery-r-2026](studies/battery-r-2026/GRADE.md) found the published estimate at exactly 0 for
++  the whole second half of the flight on **10 of 75** measurable public PX4 flights, 9 of them
++  with `BAT1_R_INTERNAL` = -1 (9 of the 53 flights that use the estimate). In 7 of the 10 it was
++  already 0 at takeoff. A pre-registered follow-up on other vehicles
++  ([GRADE-onset.md](studies/battery-r-2026/GRADE-onset.md)) found the same rate (10 of 71) and
++  that in 8 of those 10 the collapse began before takeoff.
++- The report now ends with a **Battery** section after the Compass section. `battery_r.py` says
++  whether the estimate collapsed and whether PX4 was using it. A collapse while the estimate is
++  in use is a **note** (the state of charge reads low under load and recovers after landing),
++  not a flag, so `--fail-on-flag` is unchanged. A collapse while `BAT1_R_INTERNAL` is set is
++  reported as ok, because PX4 then used the set value. Otherwise the section gives the final
++  estimate against the census's 65 non-collapsed flights (median 2.7 mOhm per cell, p10-p90
++  1.2-7.5). It suggests no resistance value.
++- **When it says "not checked".** The check needs the estimator's fields in `battery_status`
++  (PX4 v1.15 and newer), a valid current with a median of 0.5 A or more, and at least 30 s in the
++  air. Smart and DroneCAN batteries that do not run PX4's estimator are not checked.
++- **Same figures as the census.** `battery_r.py` uses the census's measurement
++  (`battr_logs.py` 0.1.0) unchanged, and a log gets the same figures here as in the census rows.
++- **Limits.** A wrong current-sensor scale, offset or sign can by itself drive the estimate to 0,
++  so the note is a reason to look at the battery plots in Flight Review, not proof of an
++  estimator fault. `battery_status` is logged at about 5 Hz. Public uploads are not a random
++  sample, and 75 flights is a small sample.
++
++How it was checked: a sealed run built 0.3.9 from 0.3.8 on `main` with exact edits
++(`studies/v039/job-diff.txt`), checked that `battery_r.py`'s measurement functions are the same
++source as the census's, and passed every existing test, the new `test_checkup_039.py` and
++`battery_r.py`'s own synthetic tests. On the two PX4 PR #24831 logs and the three PX4 main logs,
++the report was the same as 0.3.8's apart from the version and the new Battery section. It then
++re-downloaded three census logs (collapsed with the estimate in use, collapsed with a set value,
++and not collapsed), and checkup's battery figures matched the census rows
++(`studies/v039/battery-census.json`). Finally it ran the agent skill's commands exactly as
++written, from the skill folder alone.
+ 
+ ## What changed in 0.3.8: a compass check
+ 
+@@ -225,7 +264,7 @@
+ ```
+ pip install numpy pyulog ijson requests
+ python fetch_deps.py      # gps_lag.py, innov.py, fleet.py and test_gps_lag.py from px4-gps-lag
+-python -m unittest -v test_checkup test_checkup_dynmodel test_health test_checkup_037 test_checkup_038 test_compass test_gps_lag
++python -m unittest -v test_checkup test_checkup_dynmodel test_health test_checkup_037 test_checkup_038 test_checkup_039 test_compass test_battery_r test_gps_lag
+ ```
+ 
+ `smoke.py` re-measures three real logs from the study and checks them against the recorded figures. `smoke_checkup.py` does the same through `checkup.py` and the Action's script. Both download from Flight Review.
+--- /dev/null
++++ b/battery_r.py
+@@ -0,0 +1,326 @@
++"""battery_r.py: did PX4's battery-resistance estimate collapse to 0 in this flight? (px4-log-health)
++
++Since PX4 PR #23205 (merged 2024-07-02), PX4's battery library estimates each pack's internal
++resistance online (recursive least squares on V = V_oc - R * I) and, when BAT1_R_INTERNAL is -1
++(the default), uses it to correct the voltage-based state of charge for the voltage drop under
++load. A negative estimate is published as 0. The pre-registered census battery-r-2026
++(studies/battery-r-2026/GRADE.md) found the published estimate at exactly 0 for the whole second
++half of the flight on 10 of 75 measurable public PX4 flights; 9 of them had BAT1_R_INTERNAL = -1,
++so their state of charge was not corrected for load (it reads low under load and recovers after
++landing).
++
++This check measures one ULog exactly as the census did (battr_logs.py 0.1.0, copied unchanged) and
++says whether the estimate collapsed and whether PX4 was using it. It suggests no resistance value.
++
++    python battery_r.py flight.ulg [more.ulg ...] [--json]
++
++Needs numpy and pyulog. By MV2 of Munim, Inc. (mv2@munimtech.com); written with AI agents.
++Apache-2.0.
++"""
++
++import argparse
++import json
++import sys
++
++__version__ = "0.1.0"
++
++DOCS = "https://docs.px4.io/main/en/config/battery"
++TOPICS = ("battery_status", "vehicle_land_detected", "vehicle_status")
++FIELD = "internal_resistance_estimate"
++COV = "estimation_covariance_norm"
++
++# one log's measurement (as in the census, battr_logs.py 0.1.0)
++MIN_SAMPLES = 150           # 30 s of airborne samples at the default 5 Hz
++MIN_CURRENT_A = 0.5
++EARLY = 0.25                # "froze early": last change in the first quarter of airborne samples
++MAX_GAP_S = 0.5
++DATA_MIN_PAIRS = 150
++DATA_MIN_RANGE_A = 5.0
++DATA_MAX_R = -0.3           # the step fit counts only if dV and dI are this anti-correlated
++
++# battery-r-2026 (battr-summary.json, graded 2026-11-10)
++FLEET = {"source": "battery-r-2026: 75 measurable public PX4 flights (Flight Review, read 2026-11-10)",
++         "n": 75, "collapsed": 10, "used_estimate": 53, "collapsed_using_estimate": 9,
++         "alive_n": 65, "alive_p10": 1.1656, "alive_p50": 2.7357, "alive_p90": 7.4914}
++
++
++# ---------------------------------------------------------------- copied from battr_logs.py 0.1.0
++
++def airborne_mask(t, land=None, status=None):
++    """(mask, source): True at each time in `t` (us) while airborne. land: (timestamps, landed) from
++    vehicle_land_detected; status: (timestamps, arming_state) from vehicle_status, used only without
++    land (armed = 2). (None, 'none') if neither is given."""
++    import numpy as np
++    t = np.asarray(t, dtype=np.int64)
++    if land is not None and len(land[0]):
++        ts = np.asarray(land[0], dtype=np.int64)
++        flying = np.asarray(land[1]).astype(np.int64) == 0
++        source = "land_detected"
++    elif status is not None and len(status[0]):
++        ts = np.asarray(status[0], dtype=np.int64)
++        flying = np.asarray(status[1]).astype(np.int64) == 2
++        source = "armed"
++    else:
++        return None, "none"
++    idx = np.searchsorted(ts, t, side="right") - 1
++    ok = idx >= 0
++    mask = np.zeros(len(t), dtype=bool)
++    mask[ok] = flying[idx[ok]]
++    return mask, source
++
++
++def estimator_active(b):
++    """True when this battery_status instance carries a running RLS estimator: both fields present,
++    and the covariance norm is positive somewhere and takes at least two values."""
++    import numpy as np
++    if FIELD not in b or COV not in b:
++        return False
++    cov = np.asarray(b[COV], dtype=np.float64)
++    cov = cov[np.isfinite(cov)]
++    return bool(len(cov)) and float(np.max(cov)) > 0.0 and len(np.unique(cov)) >= 2
++
++
++def pick_battery(bats):
++    """multi_id of the instance with an active estimator and the highest median valid current."""
++    import numpy as np
++    best = None
++    for mid in sorted(bats):
++        b = bats[mid]
++        if "current_a" not in b or "timestamp" not in b or not estimator_active(b):
++            continue
++        c = np.asarray(b["current_a"], dtype=np.float64)
++        ok = np.isfinite(c) & (c >= 0)
++        if int(np.sum(ok)) < 2:
++            continue
++        med = float(np.median(c[ok]))
++        if best is None or med > best[0]:
++            best = (med, mid)
++    return None if best is None else best[1]
++
++
++def last_change_frac(v):
++    """Where the last change of `v` falls, as a fraction of its samples (0 = never changed)."""
++    n = len(v)
++    last = 0
++    for i in range(1, n):
++        if v[i] != v[i - 1]:
++            last = i
++    return 0.0 if n < 2 else last / float(n - 1)
++
++
++def step_fit(t, volt, cur, n_cells):
++    """Pack resistance from consecutive-sample steps: dV = -R * dI (least squares through the
++    origin), over pairs at most MAX_GAP_S apart. Per cell in mOhm, with the fit's Pearson r."""
++    import numpy as np
++    t = np.asarray(t, dtype=np.float64)
++    volt = np.asarray(volt, dtype=np.float64)
++    cur = np.asarray(cur, dtype=np.float64)
++    dt = np.diff(t) / 1e6
++    dv, di = np.diff(volt), np.diff(cur)
++    k = ((dt > 0) & (dt <= MAX_GAP_S) & np.isfinite(dv) & np.isfinite(di)
++         & (volt[1:] > 0) & (volt[:-1] > 0))          # voltage_v is 0 when invalid
++    dv, di = dv[k], di[k]
++    out = {"pairs": int(len(dv)), "range_a": None, "r": None, "mohm_per_cell": None}
++    if len(cur):
++        p5, p95 = (float(x) for x in np.percentile(cur, [5, 95]))
++        out["range_a"] = round(p95 - p5, 3)
++    if len(dv) < 3 or float(np.sum(di * di)) == 0.0 or float(np.std(dv)) == 0.0 or not n_cells:
++        return out
++    r_pack = -float(np.sum(dv * di)) / float(np.sum(di * di))
++    out["r"] = round(float(np.corrcoef(dv, di)[0, 1]), 4)
++    out["mohm_per_cell"] = round(r_pack / n_cells * 1000.0, 3)
++    return out
++
++
++def step_valid(s):
++    return (s.get("mohm_per_cell") is not None and s["pairs"] >= DATA_MIN_PAIRS
++            and (s.get("range_a") or 0) >= DATA_MIN_RANGE_A and s.get("r") is not None and s["r"] <= DATA_MAX_R)
++
++
++def cells_of(b, mask, params):
++    import numpy as np
++    if "cell_count" in b:
++        c = np.asarray(b["cell_count"], dtype=np.float64)[mask]
++        c = c[np.isfinite(c) & (c > 0)]
++        if len(c):
++            return int(np.median(c)), "battery_status"
++    for k in ("BAT1_N_CELLS", "BAT_N_CELLS"):
++        try:
++            v = int(params.get(k) or 0)
++        except (TypeError, ValueError):
++            v = 0
++        if v > 0:
++            return v, k
++    return None, None
++
++
++def measure_data(data, params=None):
++    """What this census records about one log, from {topic: {multi_id: {field: array}}} and the
++    log's initial parameters (no positions)."""
++    import numpy as np
++    params = params or {}
++    bats = data.get("battery_status") or {}
++    out = {"battery_instances": len(bats),
++           "active_instances": [int(m) for m in sorted(bats) if estimator_active(bats[m])]}
++    if not bats:
++        out["read"] = "no battery_status data"
++        return out
++    out["read"] = "ok"
++    mid = pick_battery(bats)
++    if mid is None:
++        out["measurable"] = False
++        out["why_not"] = "no active estimator with valid current"
++        return out
++    b = bats[mid]
++    out["battery_instance"] = int(mid)
++    t = np.asarray(b["timestamp"], dtype=np.int64)
++    ld = (data.get("vehicle_land_detected") or {}).get(0)
++    st = (data.get("vehicle_status") or {}).get(0)
++    land = (ld["timestamp"], ld["landed"]) if ld and "landed" in ld else None
++    status = (st["timestamp"], st["arming_state"]) if st and "arming_state" in st else None
++    mask, source = airborne_mask(t, land, status)
++    out["airborne_from"] = source
++    if mask is None:
++        out["measurable"] = False
++        out["why_not"] = "no flight state"
++        return out
++    est = np.asarray(b[FIELD], dtype=np.float64)
++    cur = np.asarray(b["current_a"], dtype=np.float64)
++    volt = np.asarray(b["voltage_v"], dtype=np.float64) if "voltage_v" in b else None
++    good = mask & np.isfinite(est) & np.isfinite(cur) & (cur >= 0)   # current_a is -1 when invalid
++    n = int(np.sum(good))
++    out["samples"] = n
++    dt = float(np.median(np.diff(t))) / 1e6 if len(t) > 1 else 0.0
++    out["airborne_s"] = round(n * dt, 1)
++    if n < MIN_SAMPLES:
++        out["measurable"] = False
++        out["why_not"] = "fewer than %d airborne samples" % MIN_SAMPLES
++        return out
++    v = est[good]
++    c = cur[good]
++    out["current_median_a"] = round(float(np.median(c)), 3)
++    if out["current_median_a"] < MIN_CURRENT_A:
++        out["measurable"] = False
++        out["why_not"] = "median airborne current under %.1f A" % MIN_CURRENT_A
++        return out
++    out["measurable"] = True
++    zero = v <= 0.0
++    tt = t[good]
++    out["r_start_mohm"] = round(float(v[0]) * 1000.0, 4)
++    out["r_end_mohm"] = round(float(v[-1]) * 1000.0, 4)
++    out["r_median_mohm"] = round(float(np.median(v)) * 1000.0, 4)
++    out["zero_end"] = bool(zero[-1])
++    out["zero_share"] = round(float(np.mean(zero)), 4)
++    out["ever_zero"] = bool(np.any(zero))
++    out["collapsed"] = bool(np.all(zero[n // 2:]))
++    out["first_zero_s"] = (round(float(tt[int(np.argmax(zero))] - tt[0]) / 1e6, 1) if np.any(zero) else None)
++    out["last_change_frac"] = round(last_change_frac(list(v)), 4)
++    out["changes"] = int(np.sum(v[1:] != v[:-1]))
++    out["froze_early"] = out["last_change_frac"] <= EARLY
++    cov = np.asarray(b[COV], dtype=np.float64)[good]
++    out["cov_start"] = float(cov[0]) if np.isfinite(cov[0]) else None
++    out["cov_end"] = float(cov[-1]) if np.isfinite(cov[-1]) else None
++    cells, cells_from = cells_of(b, mask, params)
++    out["cells"], out["cells_from"] = cells, cells_from
++    if volt is not None:
++        out["step"] = step_fit(tt, volt[good], c, cells)
++        out["step_valid"] = step_valid(out["step"])
++    else:
++        out["step_valid"] = False
++    return out
++
++
++# ---------------------------------------------------------------- the check
++
++def r_internal(params):
++    """BAT1_R_INTERNAL (or the older BAT_R_INTERNAL) from the log's parameters, or None."""
++    for k in ("BAT1_R_INTERNAL", "BAT_R_INTERNAL"):
++        if k in (params or {}):
++            try:
++                return float(params[k])
++            except (TypeError, ValueError):
++                return None
++    return None
++
++
++def verdict(m, rint=None):
++    """(level, text) for one measurement. level: 'note', 'ok' or 'not checked'."""
++    if m.get("read") != "ok":
++        return "not checked", "Battery resistance estimate not checked: %s." % m.get("read")
++    if not m.get("measurable"):
++        return "not checked", "Battery resistance estimate not checked: %s." % m.get("why_not")
++    if m.get("collapsed"):
++        fz = m.get("first_zero_s")
++        when = ("it was already 0 when the vehicle took off" if not fz
++                else "it first reached 0 %.1f s after takeoff" % fz)
++        if rint is not None and rint >= 0:
++            return "ok", ("PX4's battery-resistance estimate was 0 for the whole second half of the flight (%s), "
++                          "but BAT1_R_INTERNAL is set (%.1f mOhm per cell), so PX4 used that value, not the "
++                          "estimate." % (when, rint * 1000.0))
++        setting = ("BAT1_R_INTERNAL is -1 (use the estimate)" if rint is not None
++                   else "BAT1_R_INTERNAL is not in the log (PX4's default, -1, uses the estimate)")
++        return "note", ("PX4's battery-resistance estimate was 0 for the whole second half of the flight (%s) "
++                        "while %s, so PX4 did not correct the voltage-based state of charge for the voltage "
++                        "drop under load: it reads low under load and recovers after landing. On public PX4 "
++                        "flights this happened on %d of %d that use the estimate. A wrong current sensor scale "
++                        "or offset can also cause it. See PX4's battery estimation guide: %s"
++                        % (when, setting, FLEET["collapsed_using_estimate"], FLEET["used_estimate"], DOCS))
++    used = " BAT1_R_INTERNAL is set, so PX4 used that value instead." if (rint is not None and rint >= 0) else ""
++    return "ok", ("PX4's battery-resistance estimate did not collapse: it ended the flight at %.1f mOhm per cell "
++                  "(public PX4 flights: median %.1f, p10-p90 %.1f-%.1f).%s"
++                  % (m["r_end_mohm"], FLEET["alive_p50"], FLEET["alive_p10"], FLEET["alive_p90"], used))
++
++
++def read_log(path):
++    """({topic: {multi_id: {field: array}}}, initial parameters) from one ULog."""
++    from pyulog import ULog
++    u = ULog(path, list(TOPICS), True)
++    data = {}
++    for d in u.data_list:
++        data.setdefault(d.name, {})[d.multi_id] = d.data
++    return data, dict(u.initial_parameters)
++
++
++def check(path):
++    """The battery check of one ULog: measurement, level and text."""
++    data, params = read_log(path)
++    m = measure_data(data, params)
++    rint = r_internal(params)
++    level, text = verdict(m, rint)
++    return {"battery_r": __version__, "level": level, "text": text,
++            "collapsed": m.get("collapsed") if m.get("measurable") else None,
++            "r_end_mohm": m.get("r_end_mohm") if m.get("measurable") else None,
++            "bat_r_internal": rint, "measure": m}
++
++
++def _plain(o):
++    if hasattr(o, "item"):
++        return o.item()
++    if hasattr(o, "tolist"):
++        return o.tolist()
++    return str(o)
++
++
++def main(argv=None):
++    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
++    ap.add_argument("logs", nargs="+")
++    ap.add_argument("--json", action="store_true", help="print JSON instead of text")
++    args = ap.parse_args(argv)
++    results = []
++    for p in args.logs:
++        try:
++            r = check(p)
++        except Exception as exc:
++            r = {"battery_r": __version__, "level": "not checked",
++                 "text": "Battery resistance estimate not checked: %s: %s" % (type(exc).__name__, str(exc)[:200])}
++        r["log"] = p
++        results.append(r)
++        if not args.json:
++            print("%s\n  [%s] %s" % (p, r["level"], r["text"]))
++    if args.json:
++        print(json.dumps(results, indent=1, default=_plain))
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+--- /dev/null
++++ b/test_battery_r.py
+@@ -0,0 +1,137 @@
++"""Synthetic tests for battery_r.py (no flight log, no network).
++By MV2 of Munim, Inc.; written with AI agents. Apache-2.0."""
++
++import contextlib
++import io
++import json
++import unittest
++
++import numpy as np
++
++import battery_r as br
++
++
++def battery(est, cur, volt=None, cov=None, cells=4, n=None):
++    n = len(est) if n is None else n
++    t = np.arange(n, dtype=np.int64) * 200000          # 5 Hz
++    b = {"timestamp": t, "internal_resistance_estimate": np.asarray(est, dtype=np.float64),
++         "current_a": np.asarray(cur, dtype=np.float64),
++         "estimation_covariance_norm": (np.linspace(1.0, 0.1, n) if cov is None else np.asarray(cov)),
++         "cell_count": np.full(n, cells)}
++    if volt is not None:
++        b["voltage_v"] = np.asarray(volt, dtype=np.float64)
++    return b
++
++
++def flight(b, landed=0):
++    return {"battery_status": {0: b},
++            "vehicle_land_detected": {0: {"timestamp": np.array([0], dtype=np.int64),
++                                          "landed": np.array([landed])}}}
++
++
++def steps(n):
++    return np.array([5.0 if i % 2 == 0 else 15.0 for i in range(n)])
++
++
++def measured(collapsed, r_end=0.0, first_zero_s=None):
++    return {"read": "ok", "measurable": True, "collapsed": collapsed, "r_end_mohm": r_end,
++            "first_zero_s": first_zero_s}
++
++
++class Measure(unittest.TestCase):
++    """The census measurement, copied unchanged: same results as test_battr_logs.py's cases."""
++
++    def test_collapse(self):
++        est = [0.005] * 100 + [0.0] * 200
++        cur = steps(300)
++        m = br.measure_data(flight(battery(est, cur, volt=16.0 - 0.04 * cur)))
++        self.assertTrue(m["measurable"])
++        self.assertTrue(m["collapsed"])
++        self.assertEqual(m["zero_share"], 0.6667)
++        self.assertEqual(m["first_zero_s"], 20.0)
++        self.assertEqual(m["last_change_frac"], 0.3344)
++        self.assertEqual((m["r_start_mohm"], m["r_end_mohm"], m["changes"]), (5.0, 0.0, 1))
++        self.assertTrue(m["step_valid"])
++        self.assertAlmostEqual(m["step"]["mohm_per_cell"], 10.0, places=3)
++
++    def test_not_measurable(self):
++        m = br.measure_data(flight(battery([0.005] * 300, [0.2] * 300)))
++        self.assertEqual(m["why_not"], "median airborne current under 0.5 A")
++        m = br.measure_data(flight(battery([0.005] * 300, steps(300)), landed=1))
++        self.assertEqual(m["why_not"], "fewer than 150 airborne samples")
++        m = br.measure_data(flight(battery([0.0] * 300, steps(300), cov=np.zeros(300))))
++        self.assertEqual(m["why_not"], "no active estimator with valid current")
++        self.assertEqual(br.measure_data({})["read"], "no battery_status data")
++
++
++class RInternal(unittest.TestCase):
++    def test_r_internal(self):
++        self.assertEqual(br.r_internal({"BAT1_R_INTERNAL": -1.0}), -1.0)
++        self.assertEqual(br.r_internal({"BAT_R_INTERNAL": 0.004}), 0.004)
++        self.assertIsNone(br.r_internal({}))
++        self.assertIsNone(br.r_internal(None))
++        self.assertIsNone(br.r_internal({"BAT1_R_INTERNAL": "x"}))
++
++
++class Verdict(unittest.TestCase):
++    def test_collapse_using_the_estimate_is_a_note(self):
++        level, text = br.verdict(measured(True, 0.0, 0.0), -1.0)
++        self.assertEqual(level, "note")
++        self.assertIn("(it was already 0 when the vehicle took off) while BAT1_R_INTERNAL is -1", text)
++        self.assertIn("did not correct the voltage-based state of charge", text)
++        self.assertIn("this happened on 9 of 53 that use the estimate", text)
++        self.assertTrue(text.endswith("https://docs.px4.io/main/en/config/battery"))
++        self.assertNotIn("\n", text)
++
++    def test_collapse_in_flight(self):
++        level, text = br.verdict(measured(True, 0.0, 15.2), -1.0)
++        self.assertEqual(level, "note")
++        self.assertIn("(it first reached 0 15.2 s after takeoff)", text)
++
++    def test_collapse_without_the_parameter(self):
++        level, text = br.verdict(measured(True, 0.0, 0.0), None)
++        self.assertEqual(level, "note")
++        self.assertIn("BAT1_R_INTERNAL is not in the log", text)
++
++    def test_collapse_with_a_set_value_is_ok(self):
++        level, text = br.verdict(measured(True, 0.0, 0.0), 0.005)
++        self.assertEqual(level, "ok")
++        self.assertIn("BAT1_R_INTERNAL is set (5.0 mOhm per cell), so PX4 used that value", text)
++
++    def test_alive(self):
++        level, text = br.verdict(measured(False, 4.2), -1.0)
++        self.assertEqual(level, "ok")
++        self.assertEqual(text, "PX4's battery-resistance estimate did not collapse: it ended the flight at "
++                               "4.2 mOhm per cell (public PX4 flights: median 2.7, p10-p90 1.2-7.5).")
++        level, text = br.verdict(measured(False, 4.2), 0.002)
++        self.assertTrue(text.endswith(" BAT1_R_INTERNAL is set, so PX4 used that value instead."))
++
++    def test_not_checked(self):
++        self.assertEqual(br.verdict({"read": "no battery_status data"}),
++                         ("not checked", "Battery resistance estimate not checked: no battery_status data."))
++        self.assertEqual(br.verdict({"read": "ok", "measurable": False,
++                                     "why_not": "median airborne current under 0.5 A"}),
++                         ("not checked", "Battery resistance estimate not checked: median airborne current "
++                                         "under 0.5 A."))
++
++    def test_measured_collapse_end_to_end(self):
++        est = [0.005] * 100 + [0.0] * 200
++        m = br.measure_data(flight(battery(est, steps(300))))
++        level, text = br.verdict(m, -1.0)
++        self.assertEqual(level, "note")
++        self.assertIn("(it first reached 0 20.0 s after takeoff)", text)
++
++
++class Cli(unittest.TestCase):
++    def test_missing_file_is_reported(self):
++        buf = io.StringIO()
++        with contextlib.redirect_stdout(buf):
++            rc = br.main(["/nonexistent/flight.ulg", "--json"])
++        self.assertEqual(rc, 0)
++        rows = json.loads(buf.getvalue())
++        self.assertEqual(rows[0]["level"], "not checked")
++        self.assertTrue(rows[0]["text"].startswith("Battery resistance estimate not checked: "))
++
++
++if __name__ == "__main__":
++    unittest.main()
+--- /dev/null
++++ b/test_checkup_039.py
+@@ -0,0 +1,106 @@
++"""Tests for checkup 0.3.9: the battery check (battery_r.py, from the pre-registered battery-r-2026
++census) joins the report as a last section after the compass; a collapse is a note, never a flag.
++
++By MV2 of Munim, Inc.; written with AI agents. Apache-2.0."""
++import json
++import re
++import sys
++import types
++import unittest
++from unittest import mock
++
++import checkup
++
++QUIET = {"health_ok": False, "health_reason": "under 60 s in the air"}
++COMPASS_OK = {"compass": "0.1.0", "level": "ok", "text": "Compass barely moves with battery current: Z.",
++              "coupling_pct": 1.0, "class": "weak", "fleet_place": "p25-p50", "cal_mag_comp_typ": 0}
++NOTE = {"battery_r": "0.1.0", "level": "note", "text": "PX4's battery-resistance estimate was 0: N.",
++        "collapsed": True, "r_end_mohm": 0.0, "bat_r_internal": -1.0}
++OK = dict(NOTE, level="ok", text="PX4's battery-resistance estimate did not collapse: K.", collapsed=False,
++          r_end_mohm=2.5)
++
++
++def report(compass=None, battery=None):
++    r = {"log": "/logs/a.ulg", "checkup": checkup.__version__, "health": dict(QUIET),
++         "gps": {"skipped": "gps_lag.py and innov.py not found (run fetch_deps.py)"}, "gps_verdict": None}
++    if compass is not None:
++        r["compass"] = compass
++    if battery is not None:
++        r["battery"] = battery
++    return r
++
++
++class Version(unittest.TestCase):
++    def test_version(self):
++        self.assertEqual(checkup.__version__, "0.3.9")
++
++
++class Render(unittest.TestCase):
++    def test_section_comes_after_the_compass(self):
++        md = checkup.render(report(COMPASS_OK, OK))
++        self.assertIn("### Battery\n\nPX4's battery-resistance estimate did not collapse: K.\n", md)
++        self.assertLess(md.index("### Compass"), md.index("### Battery"))
++        self.assertTrue(md.endswith("did not collapse: K.\n"))
++
++    def test_note_is_marked(self):
++        md = checkup.render(report(COMPASS_OK, NOTE))
++        self.assertIn("### Battery\n\n**Note:** PX4's battery-resistance estimate was 0: N.\n", md)
++        self.assertNotIn("**Note:**", checkup.render(report(COMPASS_OK, OK)))
++
++    def test_old_rows_have_no_section(self):
++        self.assertNotIn("### Battery", checkup.render(report(COMPASS_OK)))
++
++    def test_removing_the_section_gives_the_038_text(self):
++        # build.py compares reports with 0.3.8's this way
++        with_b = checkup.render(report(COMPASS_OK, NOTE))
++        without = checkup.render(report(COMPASS_OK))
++        self.assertEqual(re.sub(r"\n### Battery\n\n[^\n]*\n", "", with_b), without)
++
++
++class Flagged(unittest.TestCase):
++    def test_a_battery_note_is_not_a_flag(self):
++        for b in (NOTE, OK, {"level": "not checked", "text": "Battery resistance estimate not checked: x."}, None):
++            self.assertFalse(checkup.flagged(report(COMPASS_OK, b)), b)
++
++
++class RunBattery(unittest.TestCase):
++    def test_missing_module(self):
++        with mock.patch.dict(sys.modules, {"battery_r": None}):
++            b = checkup.run_battery("a.ulg")
++        self.assertEqual(b["level"], "not checked")
++        self.assertIn("battery_r.py not found", b["text"])
++
++    def test_module_result_is_passed_through(self):
++        fake = types.SimpleNamespace(__version__="0.1.0", check=lambda p: dict(OK, log_seen=p))
++        with mock.patch.dict(sys.modules, {"battery_r": fake}):
++            b = checkup.run_battery("a.ulg")
++        self.assertEqual((b["level"], b["log_seen"]), ("ok", "a.ulg"))
++
++    def test_an_error_is_reported_not_raised(self):
++        def boom(p):
++            raise ValueError("bad log")
++        fake = types.SimpleNamespace(__version__="0.1.0", check=boom)
++        with mock.patch.dict(sys.modules, {"battery_r": fake}):
++            b = checkup.run_battery("a.ulg")
++        self.assertEqual(b["level"], "not checked")
++        self.assertEqual(b["text"], "Battery resistance estimate not checked: ValueError: bad log.")
++
++    def test_check_carries_it_into_the_row(self):
++        with mock.patch.object(checkup, "run_health", return_value=dict(QUIET)), \
++                mock.patch.object(checkup, "run_gps", return_value={"skipped": "x"}), \
++                mock.patch.object(checkup, "read_delay_inputs", return_value=None), \
++                mock.patch.object(checkup, "run_compass", return_value=COMPASS_OK), \
++                mock.patch.object(checkup, "run_battery", return_value=NOTE):
++            r = checkup.check("a.ulg", None)
++        self.assertEqual(r["battery"]["level"], "note")
++        self.assertEqual(r["compass"]["level"], "ok")
++        json.dumps(r)
++
++    def test_real_module_on_a_missing_file(self):
++        b = checkup.run_battery("/nonexistent/flight.ulg")
++        self.assertEqual(b["level"], "not checked")
++        self.assertTrue(b["text"].startswith("Battery resistance estimate not checked: "))
++
++
++if __name__ == "__main__":
++    unittest.main()

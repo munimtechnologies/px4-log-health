@@ -24,7 +24,7 @@ It prints one JSON line per log with each figure, the PX4 release, a list of pla
 
 `checkup.py` turns each log into a short Markdown report: the flags, a table of every figure with its place among 208 public flights, and a **GPS delay** verdict. The verdict measures how far the GPS lags the IMU with [px4-gps-lag](https://github.com/munimtechnologies/px4-gps-lag), compares that with the delay EKF2 assumed, and checks the direction against EKF2's own GPS velocity innovations. It suggests a new delay only when the measured lag is more than 50 ms off and the innovations don't point the other way. That is the rule px4-gps-lag's fleet studies support ([GRADE-innov-confirm.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/fleet-2026/GRADE-innov-confirm.md)). A suggested value is a starting point to check with EKF2 log replay, not a setting to fly.
 
-The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change. When a serial u-blox receiver runs `GPS_UBX_DYNMODEL` 6, the report adds one line about it (see 0.3.4 to 0.3.6 below). The report ends with a compass check: how much the compass follows the battery current (see 0.3.8 below).
+The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change. When a serial u-blox receiver runs `GPS_UBX_DYNMODEL` 6, the report adds one line about it (see 0.3.4 to 0.3.6 below). The report ends with a compass check: how much the compass follows the battery current (see 0.3.8 below), then a battery check: whether PX4's battery-resistance estimate collapsed to 0 in flight (see 0.3.9 below).
 
 ```
 pip install numpy pyulog requests
@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/px4-log-health@v0.3.8
+      - uses: munimtechnologies/px4-log-health@v0.3.9
         with:
           logs: "**/*.ulg"          # space-separated globs
           fail-on-flag: "false"     # "true" fails the step on any flag or suggestion
@@ -73,6 +73,45 @@ npx skills add munimtechnologies/px4-log-health --skill px4-log-health
 ```
 
 The skill only runs the checker locally; it sends no log anywhere.
+
+## What changed in 0.3.9: a battery check
+
+- **Did PX4's battery-resistance estimate collapse?** Since PX4 PR #23205, PX4 estimates the
+  pack's internal resistance in flight and, when `BAT1_R_INTERNAL` is -1 (the default), uses it to
+  correct the voltage-based state of charge for the voltage drop under load. A negative estimate
+  is published as 0, and then no correction is made. The pre-registered census
+  [battery-r-2026](studies/battery-r-2026/GRADE.md) found the published estimate at exactly 0 for
+  the whole second half of the flight on **10 of 75** measurable public PX4 flights, 9 of them
+  with `BAT1_R_INTERNAL` = -1 (9 of the 53 flights that use the estimate). In 7 of the 10 it was
+  already 0 at takeoff. A pre-registered follow-up on other vehicles
+  ([GRADE-onset.md](studies/battery-r-2026/GRADE-onset.md)) found the same rate (10 of 71) and
+  that in 8 of those 10 the collapse began before takeoff.
+- The report now ends with a **Battery** section after the Compass section. `battery_r.py` says
+  whether the estimate collapsed and whether PX4 was using it. A collapse while the estimate is
+  in use is a **note** (the state of charge reads low under load and recovers after landing),
+  not a flag, so `--fail-on-flag` is unchanged. A collapse while `BAT1_R_INTERNAL` is set is
+  reported as ok, because PX4 then used the set value. Otherwise the section gives the final
+  estimate against the census's 65 non-collapsed flights (median 2.7 mOhm per cell, p10-p90
+  1.2-7.5). It suggests no resistance value.
+- **When it says "not checked".** The check needs the estimator's fields in `battery_status`
+  (PX4 v1.15 and newer), a valid current with a median of 0.5 A or more, and at least 30 s in the
+  air. Smart and DroneCAN batteries that do not run PX4's estimator are not checked.
+- **Same figures as the census.** `battery_r.py` uses the census's measurement
+  (`battr_logs.py` 0.1.0) unchanged, and a log gets the same figures here as in the census rows.
+- **Limits.** A wrong current-sensor scale, offset or sign can by itself drive the estimate to 0,
+  so the note is a reason to look at the battery plots in Flight Review, not proof of an
+  estimator fault. `battery_status` is logged at about 5 Hz. Public uploads are not a random
+  sample, and 75 flights is a small sample.
+
+How it was checked: a sealed run built 0.3.9 from 0.3.8 on `main` with exact edits
+(`studies/v039/job-diff.txt`), checked that `battery_r.py`'s measurement functions are the same
+source as the census's, and passed every existing test, the new `test_checkup_039.py` and
+`battery_r.py`'s own synthetic tests. On the two PX4 PR #24831 logs and the three PX4 main logs,
+the report was the same as 0.3.8's apart from the version and the new Battery section. It then
+re-downloaded three census logs (collapsed with the estimate in use, collapsed with a set value,
+and not collapsed), and checkup's battery figures matched the census rows
+(`studies/v039/battery-census.json`). Finally it ran the agent skill's commands exactly as
+written, from the skill folder alone.
 
 ## What changed in 0.3.8: a compass check
 
@@ -225,7 +264,7 @@ Six of ten health predictions held. Our priors on vibration and jamming were too
 ```
 pip install numpy pyulog ijson requests
 python fetch_deps.py      # gps_lag.py, innov.py, fleet.py and test_gps_lag.py from px4-gps-lag
-python -m unittest -v test_checkup test_checkup_dynmodel test_health test_checkup_037 test_checkup_038 test_compass test_gps_lag
+python -m unittest -v test_checkup test_checkup_dynmodel test_health test_checkup_037 test_checkup_038 test_checkup_039 test_compass test_battery_r test_gps_lag
 ```
 
 `smoke.py` re-measures three real logs from the study and checks them against the recorded figures. `smoke_checkup.py` does the same through `checkup.py` and the Action's script. Both download from Flight Review.

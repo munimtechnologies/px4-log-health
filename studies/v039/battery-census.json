@@ -1,0 +1,60 @@
+{
+ "battery_r": "0.1.0",
+ "checkup": "0.3.9",
+ "r_tolerance": 1e-06,
+ "cases": [
+  {
+   "order": 3,
+   "log_id": "026bcfd6-de20-4069-b3cd-e15a4a21a66f",
+   "census_order": 3,
+   "expected_level": "ok",
+   "level": "ok",
+   "text": "PX4's battery-resistance estimate was 0 for the whole second half of the flight (it was already 0 when the vehicle took off), but BAT1_R_INTERNAL is set (5.0 mOhm per cell), so PX4 used that value, not the estimate.",
+   "collapsed": true,
+   "r_end_mohm": 0.0,
+   "bat_r_internal": 0.004999999888241291,
+   "census_bat_r_internal": 0.005,
+   "bat_r_internal_same_within_1e-6": true,
+   "measure_same_as_census": true,
+   "same_as_census": true,
+   "bytes": 7229545,
+   "sha256": "e98687342d347446e952753bb11dfa41d82964f0684a5549b274ace8bd97a08b"
+  },
+  {
+   "order": 4,
+   "log_id": "03ce3cc6-db48-4134-b571-d98d4b03d3e4",
+   "census_order": 4,
+   "expected_level": "note",
+   "level": "note",
+   "text": "PX4's battery-resistance estimate was 0 for the whole second half of the flight (it first reached 0 6.4 s after takeoff) while BAT1_R_INTERNAL is -1 (use the estimate), so PX4 did not correct the voltage-based state of charge for the voltage drop under load: it reads low under load and recovers after landing. On public PX4 flights this happened on 9 of 53 that use the estimate. A wrong current sensor scale or offset can also cause it. See PX4's battery estimation guide: https://docs.px4.io/main/en/config/battery",
+   "collapsed": true,
+   "r_end_mohm": 0.0,
+   "bat_r_internal": -1.0,
+   "census_bat_r_internal": -1.0,
+   "bat_r_internal_same_within_1e-6": true,
+   "measure_same_as_census": true,
+   "same_as_census": true,
+   "bytes": 58010379,
+   "sha256": "8d3a08dc1ab926118c25472950d4d4b08e7d3ba70394717498c8a1917ea35121"
+  },
+  {
+   "order": 121,
+   "log_id": "9f9268ce-1bc2-4a45-aa27-77f55cea35e7",
+   "census_order": 121,
+   "expected_level": "ok",
+   "level": "ok",
+   "text": "PX4's battery-resistance estimate did not collapse: it ended the flight at 10.5 mOhm per cell (public PX4 flights: median 2.7, p10-p90 1.2-7.5).",
+   "collapsed": false,
+   "r_end_mohm": 10.5238,
+   "bat_r_internal": -1.0,
+   "census_bat_r_internal": -1.0,
+   "bat_r_internal_same_within_1e-6": true,
+   "measure_same_as_census": true,
+   "same_as_census": true,
+   "bytes": 4242485,
+   "sha256": "c5b8e0653a47888a51b714d245d1c54bb440cf574b01aaad8012b8ec3bb11cea"
+  }
+ ],
+ "note_lines": 1,
+ "ok": true
+}
