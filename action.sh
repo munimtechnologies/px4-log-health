@@ -6,7 +6,7 @@
 set -euo pipefail
 
 here="${GITHUB_ACTION_PATH:-$(cd "$(dirname "$0")" && pwd)}"
-ref="${INPUT_GPS_LAG_REF:-967b5ad92d04ca6ac7e29684b411fbf5df243e05}"
+ref="${INPUT_GPS_LAG_REF:-f0b39b3eff9819c0e9cbbed5d23e3d50a639696b}"
 summary="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 patterns="${INPUT_LOGS:-**/*.ulg}"
 

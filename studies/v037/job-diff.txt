@@ -1,0 +1,205 @@
+--- a/checkup.py
++++ b/checkup.py
+@@ -19,7 +19,9 @@
+ receiver, SENS_GPS0_DELAY or SENS_GPS1_DELAY (renamed SENS_GNSS0_DELAY /
+ SENS_GNSS1_DELAY on main by PR #24399, 2026-09-29), or by a PPS correction,
+ and EKF2 fuses the sample at that time. On those logs the delay is read from
+-the log itself, as timestamp minus timestamp_sample.
++the log itself, as timestamp minus timestamp_sample. A GPS driver that
++stamps its own sample times overrides the delay parameter; DroneCAN receivers
++do since PR #27427 (v1.18 and main), and the report then says so (0.3.7).
+ 
+     python checkup.py flight.ulg [more.ulg ...] [--md report.md] [--json rows.jsonl] [--fail-on-flag]
+ 
+@@ -43,7 +45,7 @@
+ 
+ import health
+ 
+-__version__ = "0.3.6"
++__version__ = "0.3.7"
+ 
+ OFF_MS = 50.0           # px4-gps-lag rule D1: suggest only when the lag is this far off the delay EKF2 assumed
+ NEAR_MS = 40.0          # within OFF_MS but this close to it: say so, with one decimal
+@@ -51,7 +53,11 @@
+ DEFAULT_DELAY_MS = 110.0  # PX4 v1.18+: used when SENS_GPSn_ID are set and none matches the receiver
+ DELAY_TOPICS = ("vehicle_gps_position", "vehicle_gnss")
+ NEW_TOPIC_REASON = ("this log uses PX4's newer vehicle_gnss topic (PX4 main since 2026-09-29), "
+-                    "which gps_lag.py does not read yet")
++                    "which this copy of gps_lag.py does not read (px4-gps-lag 0.2.0 does; run fetch_deps.py)")
++DRONECAN_BUS = 3  # bits 0-2 of a PX4 device id are the bus type; 3 is UAVCAN (DroneCAN)
++DRONECAN_NOTE = ("this DroneCAN receiver's own time stamps set its sample times (PX4 PR #27427, in v1.18 "
++                 "and main), and PX4 then does not apply %sn_DELAY, so changing that parameter would not "
++                 "change when EKF2 fuses its samples")
+ # px4-gps-lag studies/mismatch-2026/GRADE.md (pre-registered; D1 fired, M3 failed): 256 public logs,
+ # 93 more than 50 ms off their setting. Median lift (log10 of the GPS velocity test ratio while
+ # accelerating over steady flight) 0.4348 vs 0.24285; logs with any rejection 20.43% vs 15.95%,
+@@ -229,6 +235,12 @@
+     return {"value": value, "device_id": dev, "devtype": "0x%02X" % devtype, "note": value == 6}
+ 
+ 
++def _dronecan(a):
++    """True when applied_delay's receiver is on the DroneCAN (UAVCAN) bus."""
++    dev = (a or {}).get("device_id")
++    return dev is not None and (_u32(dev) & 0x7) == DRONECAN_BUS
++
++
+ def gps_verdict(lag, inn, applied=None):
+     """What to tell the user about the GPS delay of one log.
+ 
+@@ -251,6 +263,8 @@
+            "suggest_ms": None, "near_line": False}
+     if used:
+         out["applied"] = used
++        out["delay_set_by"] = ("parameter" if used.get("source") == "parameter"
++                               else "DroneCAN receiver" if _dronecan(used) else "PPS or GPS driver")
+     if inn and inn.get("passed") and out["d_ms"]:
+         x = inn["implied_excess_ms"]
+         out["implied_ms"] = x
+@@ -263,7 +277,9 @@
+     else:
+         out["status"] = "off"
+         if out["innov"] != "disagrees":
+-            if used and used.get("source") != "parameter":
++            if used and used.get("source") != "parameter" and _dronecan(used):
++                out["no_suggestion"] = DRONECAN_NOTE % used["prefix"]
++            elif used and used.get("source") != "parameter":
+                 out["no_suggestion"] = ("the log's GPS sample times were set by PPS or the GPS driver, "
+                                         "not by a delay parameter")
+             else:
+@@ -285,7 +301,8 @@
+     if not g.get("skipped"):
+         applied = applied_delay(**inputs) if inputs else None
+         lag = g.get("lag") or {}
+-        if inputs and inputs.get("topic") == "vehicle_gnss" and not lag.get("passed"):
++        if (inputs and inputs.get("topic") == "vehicle_gnss" and not lag.get("passed")
++                and "vehicle_gps_position" in str(lag.get("reason", ""))):
+             g["lag"] = dict(lag, passed=False, reason="%s (%s)" % (NEW_TOPIC_REASON, lag.get("reason", "not run")))
+         verdict = gps_verdict(g.get("lag"), g.get("innov"), applied)
+     return {"log": path, "checkup": __version__, "health": h, "gps": g, "gps_verdict": verdict,
+@@ -306,6 +323,9 @@
+     diff = _signed(v["d_ms"], "%+.1f" if near else "%+.0f")
+     if not a:
+         return "; this vehicle's EKF2_GPS_DELAY is %.0f ms (%s ms)." % (v["param_ms"], diff)
++    if a.get("source") != "parameter" and _dronecan(a):
++        return ("; EKF2 fused this log's GPS samples %.0f ms before they arrived, a shift the DroneCAN "
++                "receiver's own time stamps set, not %sn_DELAY (%s ms)." % (v["param_ms"], a["prefix"], diff))
+     if a.get("source") != "parameter":
+         return ("; EKF2 fused this log's GPS samples %.0f ms before they arrived, a shift set by PPS or the "
+                 "GPS driver rather than %sn_DELAY (%s ms)." % (v["param_ms"], a["prefix"], diff))
+--- a/fetch_deps.py
++++ b/fetch_deps.py
+@@ -1,4 +1,4 @@
+-"""Fetch gps_lag.py (0.1.0), innov.py (0.2.0), fleet.py (0.1.1) and
++"""Fetch gps_lag.py (0.2.0), innov.py (0.2.0), fleet.py (0.1.1) and
+ test_gps_lag.py from px4-gps-lag at a pinned commit. checkup.py uses
+ gps_lag.py and innov.py; fleet_health.py and smoke.py use fleet.py; the tests
+ use all of them. Writes fetched.json with their hashes.
+@@ -12,8 +12,8 @@
+ import sys
+ import urllib.request
+ 
+-PIN = "967b5ad92d04ca6ac7e29684b411fbf5df243e05"
+-FILES = (("gps_lag.py", "0.1.0"), ("innov.py", "0.2.0"), ("fleet.py", "0.1.1"), ("test_gps_lag.py", None))
++PIN = "f0b39b3eff9819c0e9cbbed5d23e3d50a639696b"
++FILES = (("gps_lag.py", "0.2.0"), ("innov.py", "0.2.0"), ("fleet.py", "0.1.1"), ("test_gps_lag.py", None))
+ 
+ 
+ def get(url):
+--- a/action.yml
++++ b/action.yml
+@@ -20,7 +20,7 @@
+   gps-lag-ref:
+     description: Commit of munimtechnologies/px4-gps-lag to take gps_lag.py and innov.py from.
+     required: false
+-    default: 967b5ad92d04ca6ac7e29684b411fbf5df243e05
++    default: f0b39b3eff9819c0e9cbbed5d23e3d50a639696b
+ runs:
+   using: composite
+   steps:
+--- a/action.sh
++++ b/action.sh
+@@ -6,7 +6,7 @@
+ set -euo pipefail
+ 
+ here="${GITHUB_ACTION_PATH:-$(cd "$(dirname "$0")" && pwd)}"
+-ref="${INPUT_GPS_LAG_REF:-967b5ad92d04ca6ac7e29684b411fbf5df243e05}"
++ref="${INPUT_GPS_LAG_REF:-f0b39b3eff9819c0e9cbbed5d23e3d50a639696b}"
+ summary="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+ patterns="${INPUT_LOGS:-**/*.ulg}"
+ 
+--- a/test_checkup_dynmodel.py
++++ b/test_checkup_dynmodel.py
+@@ -37,7 +37,7 @@
+ 
+ class Info(unittest.TestCase):
+     def test_version(self):
+-        self.assertEqual(checkup.__version__, "0.3.6")
++        self.assertEqual(checkup.__version__, "0.3.7")
+ 
+     def test_device_id_layout(self):
+         self.assertEqual(F9P_SERIAL & 0x7, 5)
+--- a/README.md
++++ b/README.md
+@@ -38,9 +38,9 @@
+ 
+ ### In your browser
+ 
+-[munimv2.github.io/px4-log-check](https://munimv2.github.io/px4-log-check/) runs `checkup.py` in [Pyodide](https://pyodide.org/) (Python in WebAssembly), with numpy and pyulog. It runs 0.3.4, from this repo's v0.3.4 tag, so it reads the per-receiver delay of PX4 v1.18 logs and adds the dynamic model line, like the command line. Pick one or more `.ulg` files and the report appears on the page. You can download it as Markdown and download the figures as JSON lines. The page fetches Pyodide and numpy from the jsDelivr CDN, pyulog from PyPI, and the checker's code from this repo's tag and px4-gps-lag at a pinned commit. The log itself stays in the browser tab.
++[munimv2.github.io/px4-log-check](https://munimv2.github.io/px4-log-check/) runs `checkup.py` in [Pyodide](https://pyodide.org/) (Python in WebAssembly), with numpy and pyulog. It runs 0.3.6, from this repo's v0.3.6 tag, so it reads the per-receiver delay of PX4 v1.18 logs and adds the dynamic model line, like the command line. Pick one or more `.ulg` files and the report appears on the page. You can download it as Markdown and download the figures as JSON lines. The page fetches Pyodide and numpy from the jsDelivr CDN, pyulog from PyPI, and the checker's code from this repo's tag and px4-gps-lag at a pinned commit. The log itself stays in the browser tab.
+ 
+-**How it was checked.** A sealed run loaded the page's own `core.js` (0.2.0) in Node with the same Pyodide build (314.0.7). It ran the two logs attached to PX4 PR #24831 through it, downloaded once and checked against the sha256 px4-gps-lag's paired job recorded (`aa6997a9…3b49`). The browser report was identical to [studies/dynmodel/report.md](studies/dynmodel/report.md), the report `checkup.py` 0.3.4 wrote from the command line. Both logs were read as a serial u-blox F9P, and only the model-6 log got the dynamic model line. The page's first version (0.3.1) was checked the same way on the three public logs of the sample report.
++**How it was checked.** A sealed run loaded the page's own `core.js` (0.2.1) in Node with the same Pyodide build (314.0.7) and ran checkup 0.3.6, from this repo's v0.3.6 tag, on the two public logs from PX4 PR #24831 (downloaded once and checked against a recorded sha256). The page's report was identical to `studies/dynmodel/report-0.3.6.md`, the command line's report: both logs were read as a serial u-blox receiver (device type 0xAA), and only the model-6 log got the dynamic-model line. The page's first version (0.3.1) was checked the same way on three public logs.
+ 
+ ### As a GitHub Action
+ 
+@@ -54,7 +54,7 @@
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+-      - uses: munimtechnologies/px4-log-health@v0.3.6
++      - uses: munimtechnologies/px4-log-health@v0.3.7
+         with:
+           logs: "**/*.ulg"          # space-separated globs
+           fail-on-flag: "false"     # "true" fails the step on any flag or suggestion
+@@ -66,13 +66,40 @@
+ 
+ ### For coding agents (agent skill)
+ 
+-[skills/px4-log-health/SKILL.md](skills/px4-log-health/SKILL.md) tells a coding agent (Claude Code, Codex, Cursor and others that read the open SKILL.md format) when to reach for this checker, how to run it on a user's `.ulg` from the pinned release, and how to explain the report without overstating it: a flag is not a diagnosis, a suggested GPS delay is a value to verify with EKF2 log replay, and PX4 main logs get no GPS delay verdict yet. Install it into a project with the open [skills](https://github.com/vercel-labs/skills) CLI:
++[skills/px4-log-health/SKILL.md](skills/px4-log-health/SKILL.md) tells a coding agent (Claude Code, Codex, Cursor and others that read the open SKILL.md format) when to reach for this checker, how to run it on a user's `.ulg` from the copy of the code bundled in the skill, and how to explain the report without overstating it: a flag is not a diagnosis, a suggested GPS delay is a value to verify with EKF2 log replay, and a GPS delay set by a DroneCAN receiver's own time stamps is not changed by the delay parameter. Install it into a project with the open [skills](https://github.com/vercel-labs/skills) CLI:
+ 
+ ```
+ npx skills add munimtechnologies/px4-log-health --skill px4-log-health
+ ```
+ 
+ The skill only runs the checker locally; it sends no log anywhere.
++
++## What changed in 0.3.7: GPS verdicts on PX4 main logs, and DroneCAN receivers named
++
++- **PX4 main logs get a GPS delay verdict.** `fetch_deps.py` and the GitHub Action now take
++  px4-gps-lag 0.2.0 (commit `f0b39b3`), which reads PX4 main's `vehicle_gnss` topic. Before, the
++  report said the lag of these logs could not be measured yet.
++- **When a DroneCAN receiver set the delay, the report says so.** On PX4 v1.18 and main, PX4 uses a
++  GPS driver's own sample time when the driver provides one, and then does not apply
++  `SENS_GPSn_DELAY` / `SENS_GNSSn_DELAY` (the parameter's description: "Only applied when the GPS
++  driver does not provide its own timestamp_sample correction"). DroneCAN receivers provide one
++  since PX4 PR #27427. checkup already compared the measured lag with the delay PX4 applied, read
++  from the log's own sample times. 0.3.7 adds `delay_set_by` to each JSON row (`parameter`,
++  `DroneCAN receiver`, or `PPS or GPS driver`), and for a DroneCAN receiver it says that changing
++  the delay parameter would not change when EKF2 fuses its samples, so it suggests no value.
++- On the three DroneCAN receivers among the 11 public PX4 main logs in px4-gps-lag's gnss-2026
++  study, the measured lag was 12 to 83 ms later than the delay the receiver reported. Whether that
++  holds on other vehicles is being tested, pre-registered, in px4-gps-lag `studies/dronecan-2026`.
++  checkup adds no warning about it until that study is graded.
++- **The agent skill carries its own code.** `skills/px4-log-health/scripts/` holds checkup 0.3.7
++  and the px4-gps-lag 0.2.0 files it needs, with their sha256 in `SOURCES.json`, so an agent runs
++  it after `pip install numpy pyulog` without cloning or downloading anything else.
++
++How it was checked: a sealed run built 0.3.7 from 0.3.6 with exact edits
++(`studies/v037/job-diff.txt`), passed every existing test and the new `test_checkup_037.py`, gave
++the same report as 0.3.6 on the two PX4 PR #24831 logs, and ran on three public PX4 main logs
++from Flight Review, two with DroneCAN receivers (`studies/v037/report.md`). It then ran the agent
++skill's commands exactly as written, from the skill folder alone.
+ 
+ ## What changed in 0.3.6: the fleet shows the same smoothing
+ 

@@ -38,9 +38,9 @@ Real reports: three public logs from PX4 v1.13-v1.16 in [studies/fleet-health-20
 
 ### In your browser
 
-[munimv2.github.io/px4-log-check](https://munimv2.github.io/px4-log-check/) runs `checkup.py` in [Pyodide](https://pyodide.org/) (Python in WebAssembly), with numpy and pyulog. It runs 0.3.4, from this repo's v0.3.4 tag, so it reads the per-receiver delay of PX4 v1.18 logs and adds the dynamic model line, like the command line. Pick one or more `.ulg` files and the report appears on the page. You can download it as Markdown and download the figures as JSON lines. The page fetches Pyodide and numpy from the jsDelivr CDN, pyulog from PyPI, and the checker's code from this repo's tag and px4-gps-lag at a pinned commit. The log itself stays in the browser tab.
+[munimv2.github.io/px4-log-check](https://munimv2.github.io/px4-log-check/) runs `checkup.py` in [Pyodide](https://pyodide.org/) (Python in WebAssembly), with numpy and pyulog. It runs 0.3.6, from this repo's v0.3.6 tag, so it reads the per-receiver delay of PX4 v1.18 logs and adds the dynamic model line, like the command line. Pick one or more `.ulg` files and the report appears on the page. You can download it as Markdown and download the figures as JSON lines. The page fetches Pyodide and numpy from the jsDelivr CDN, pyulog from PyPI, and the checker's code from this repo's tag and px4-gps-lag at a pinned commit. The log itself stays in the browser tab.
 
-**How it was checked.** A sealed run loaded the page's own `core.js` (0.2.0) in Node with the same Pyodide build (314.0.7). It ran the two logs attached to PX4 PR #24831 through it, downloaded once and checked against the sha256 px4-gps-lag's paired job recorded (`aa6997a9…3b49`). The browser report was identical to [studies/dynmodel/report.md](studies/dynmodel/report.md), the report `checkup.py` 0.3.4 wrote from the command line. Both logs were read as a serial u-blox F9P, and only the model-6 log got the dynamic model line. The page's first version (0.3.1) was checked the same way on the three public logs of the sample report.
+**How it was checked.** A sealed run loaded the page's own `core.js` (0.2.1) in Node with the same Pyodide build (314.0.7) and ran checkup 0.3.6, from this repo's v0.3.6 tag, on the two public logs from PX4 PR #24831 (downloaded once and checked against a recorded sha256). The page's report was identical to `studies/dynmodel/report-0.3.6.md`, the command line's report: both logs were read as a serial u-blox receiver (device type 0xAA), and only the model-6 log got the dynamic-model line. The page's first version (0.3.1) was checked the same way on three public logs.
 
 ### As a GitHub Action
 
@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/px4-log-health@v0.3.6
+      - uses: munimtechnologies/px4-log-health@v0.3.7
         with:
           logs: "**/*.ulg"          # space-separated globs
           fail-on-flag: "false"     # "true" fails the step on any flag or suggestion
@@ -66,13 +66,40 @@ The Action installs numpy and pyulog, fetches `gps_lag.py` and `innov.py` from p
 
 ### For coding agents (agent skill)
 
-[skills/px4-log-health/SKILL.md](skills/px4-log-health/SKILL.md) tells a coding agent (Claude Code, Codex, Cursor and others that read the open SKILL.md format) when to reach for this checker, how to run it on a user's `.ulg` from the pinned release, and how to explain the report without overstating it: a flag is not a diagnosis, a suggested GPS delay is a value to verify with EKF2 log replay, and PX4 main logs get no GPS delay verdict yet. Install it into a project with the open [skills](https://github.com/vercel-labs/skills) CLI:
+[skills/px4-log-health/SKILL.md](skills/px4-log-health/SKILL.md) tells a coding agent (Claude Code, Codex, Cursor and others that read the open SKILL.md format) when to reach for this checker, how to run it on a user's `.ulg` from the copy of the code bundled in the skill, and how to explain the report without overstating it: a flag is not a diagnosis, a suggested GPS delay is a value to verify with EKF2 log replay, and a GPS delay set by a DroneCAN receiver's own time stamps is not changed by the delay parameter. Install it into a project with the open [skills](https://github.com/vercel-labs/skills) CLI:
 
 ```
 npx skills add munimtechnologies/px4-log-health --skill px4-log-health
 ```
 
 The skill only runs the checker locally; it sends no log anywhere.
+
+## What changed in 0.3.7: GPS verdicts on PX4 main logs, and DroneCAN receivers named
+
+- **PX4 main logs get a GPS delay verdict.** `fetch_deps.py` and the GitHub Action now take
+  px4-gps-lag 0.2.0 (commit `f0b39b3`), which reads PX4 main's `vehicle_gnss` topic. Before, the
+  report said the lag of these logs could not be measured yet.
+- **When a DroneCAN receiver set the delay, the report says so.** On PX4 v1.18 and main, PX4 uses a
+  GPS driver's own sample time when the driver provides one, and then does not apply
+  `SENS_GPSn_DELAY` / `SENS_GNSSn_DELAY` (the parameter's description: "Only applied when the GPS
+  driver does not provide its own timestamp_sample correction"). DroneCAN receivers provide one
+  since PX4 PR #27427. checkup already compared the measured lag with the delay PX4 applied, read
+  from the log's own sample times. 0.3.7 adds `delay_set_by` to each JSON row (`parameter`,
+  `DroneCAN receiver`, or `PPS or GPS driver`), and for a DroneCAN receiver it says that changing
+  the delay parameter would not change when EKF2 fuses its samples, so it suggests no value.
+- On the three DroneCAN receivers among the 11 public PX4 main logs in px4-gps-lag's gnss-2026
+  study, the measured lag was 12 to 83 ms later than the delay the receiver reported. Whether that
+  holds on other vehicles is being tested, pre-registered, in px4-gps-lag `studies/dronecan-2026`.
+  checkup adds no warning about it until that study is graded.
+- **The agent skill carries its own code.** `skills/px4-log-health/scripts/` holds checkup 0.3.7
+  and the px4-gps-lag 0.2.0 files it needs, with their sha256 in `SOURCES.json`, so an agent runs
+  it after `pip install numpy pyulog` without cloning or downloading anything else.
+
+How it was checked: a sealed run built 0.3.7 from 0.3.6 with exact edits
+(`studies/v037/job-diff.txt`), passed every existing test and the new `test_checkup_037.py`, gave
+the same report as 0.3.6 on the two PX4 PR #24831 logs, and ran on three public PX4 main logs
+from Flight Review, two with DroneCAN receivers (`studies/v037/report.md`). It then ran the agent
+skill's commands exactly as written, from the skill folder alone.
 
 ## What changed in 0.3.6: the fleet shows the same smoothing
 

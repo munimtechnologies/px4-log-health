@@ -1,4 +1,4 @@
-"""Fetch gps_lag.py (0.1.0), innov.py (0.2.0), fleet.py (0.1.1) and
+"""Fetch gps_lag.py (0.2.0), innov.py (0.2.0), fleet.py (0.1.1) and
 test_gps_lag.py from px4-gps-lag at a pinned commit. checkup.py uses
 gps_lag.py and innov.py; fleet_health.py and smoke.py use fleet.py; the tests
 use all of them. Writes fetched.json with their hashes.
@@ -12,8 +12,8 @@ import json
 import sys
 import urllib.request
 
-PIN = "967b5ad92d04ca6ac7e29684b411fbf5df243e05"
-FILES = (("gps_lag.py", "0.1.0"), ("innov.py", "0.2.0"), ("fleet.py", "0.1.1"), ("test_gps_lag.py", None))
+PIN = "f0b39b3eff9819c0e9cbbed5d23e3d50a639696b"
+FILES = (("gps_lag.py", "0.2.0"), ("innov.py", "0.2.0"), ("fleet.py", "0.1.1"), ("test_gps_lag.py", None))
 
 
 def get(url):

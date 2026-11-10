@@ -1,0 +1,237 @@
+{
+ "base": "4395898956d97be8b1d7ea664cb1a52935a4d442",
+ "pin": "f0b39b3eff9819c0e9cbbed5d23e3d50a639696b",
+ "steps": {
+  "fetch_deps": {
+   "cmd": "/usr/local/bin/python fetch_deps.py",
+   "exit": 0
+  },
+  "tests": {
+   "cmd": "/usr/local/bin/python -m unittest -v test_checkup test_checkup_dynmodel test_health test_checkup_037 test_gps_lag",
+   "exit": 0
+  },
+  "smoke_dyn": {
+   "cmd": "/usr/local/bin/python checkup.py /tmp/dyn/log_5_2025-5-27-11-50-34.ulg /tmp/dyn/log_8_2025-5-27-12-55-02.ulg --md /tmp/dyn-report.md --json /tmp/dyn-rows.jsonl",
+   "exit": 0
+  },
+  "smoke_main": {
+   "cmd": "/usr/local/bin/python checkup.py /data/px4main/5f1584c9-83ad-4d5e-97ac-46b3ed19f8e6.ulg /data/px4main/5548f136-8ecc-4b45-8c14-721bdf888a62.ulg /data/px4main/53a8335a-3705-4d98-acff-5d21cae8e6de.ulg --md /tmp/main-report.md --json /tmp/main-rows.jsonl",
+   "exit": 0
+  },
+  "skill_step1_0": {
+   "cmd": "pip install numpy pyulog",
+   "exit": 0
+  },
+  "skill_step2": {
+   "cmd": "python .claude/skills/px4-log-health/scripts/checkup.py /tmp/dyn/log_5_2025-5-27-11-50-34.ulg /tmp/dyn/log_8_2025-5-27-12-55-02.ulg --md report.md --json rows.jsonl",
+   "exit": 0
+  }
+ },
+ "ok": true,
+ "tarball_sha256": "4af0b61a5aff763a0e4ba593f86679c9d4155260165ea072d7a584fdf0367552",
+ "edits": [
+  {
+   "n": 0,
+   "file": "checkup.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 1,
+   "file": "checkup.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 2,
+   "file": "checkup.py",
+   "flags": [
+    "optional"
+   ],
+   "matches": 1
+  },
+  {
+   "n": 3,
+   "file": "checkup.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 4,
+   "file": "checkup.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 5,
+   "file": "checkup.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 6,
+   "file": "checkup.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 7,
+   "file": "checkup.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 8,
+   "file": "fetch_deps.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 9,
+   "file": "fetch_deps.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 10,
+   "file": "fetch_deps.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 11,
+   "file": "action.yml",
+   "flags": [
+    "all"
+   ],
+   "matches": 1
+  },
+  {
+   "n": 12,
+   "file": "action.sh",
+   "flags": [
+    "all"
+   ],
+   "matches": 1
+  },
+  {
+   "n": 13,
+   "file": "test_checkup_dynmodel.py",
+   "flags": [],
+   "matches": 1
+  }
+ ],
+ "readme": {
+  "section_inserted": true,
+  "browser_tag": 1,
+  "browser_check": 1,
+  "skill_release": 1,
+  "skill_main": 1,
+  "action_tag": 1
+ },
+ "tests": [
+  "Ran 111 tests in 0.546s",
+  "OK"
+ ],
+ "smoke_dyn": {
+  "checkup": [
+   "0.3.7"
+  ],
+  "same_as_036_but_version": true,
+  "dynmodel_notes": 1,
+  "gps_dynmodel": [
+   7,
+   6
+  ],
+  "lag_ms": [
+   110.5,
+   214.2
+  ],
+  "suggest_ms": [
+   null,
+   214
+  ],
+  "delay_set_by": [
+   null,
+   null
+  ]
+ },
+ "main_logs": {
+  "5f1584c9-83ad-4d5e-97ac-46b3ed19f8e6": {
+   "bytes": 11582978,
+   "sha256": "1be933d5f17d826f5838c79dbc992762427510695feebc1ec6b3212a24ffca7b"
+  },
+  "5548f136-8ecc-4b45-8c14-721bdf888a62": {
+   "bytes": 75479314,
+   "sha256": "d6ef735fb67f49f5202d6dce5cf6a69242302685754c8300a20ac22a3f93dec5"
+  },
+  "53a8335a-3705-4d98-acff-5d21cae8e6de": {
+   "bytes": 154051136,
+   "sha256": "14421d51fca926cc2a0dcea530e5d2bcd880c0d2462f404c05b33c326ee6d16c"
+  }
+ },
+ "smoke_main": [
+  {
+   "log_id": "5f1584c9-83ad-4d5e-97ac-46b3ed19f8e6",
+   "status": "off",
+   "reason": null,
+   "lag_ms": 166.3,
+   "param_ms": 85.7,
+   "param_name": "SENS_GNSS0_DELAY",
+   "d_ms": 80.60000000000001,
+   "innov": "agrees",
+   "suggest_ms": null,
+   "delay_set_by": "DroneCAN receiver",
+   "no_suggestion": "this DroneCAN receiver's own time stamps set its sample times (PX4 PR #27427, in v1.18 and main), and PX4 then does not apply SENS_GNSSn_DELAY, so changing that parameter would not change when EKF2 fuses its samples",
+   "device_id": 8748035,
+   "gnss2026_lag_ms": 166.3,
+   "gnss2026_applied_ms": 85.65,
+   "lag_matches_gnss2026": true,
+   "health_ok": true
+  },
+  {
+   "log_id": "5548f136-8ecc-4b45-8c14-721bdf888a62",
+   "status": "ok",
+   "reason": null,
+   "lag_ms": 110.3,
+   "param_ms": 98.0,
+   "param_name": "SENS_GNSS0_DELAY",
+   "d_ms": 12.299999999999997,
+   "innov": "disagrees",
+   "suggest_ms": null,
+   "delay_set_by": "DroneCAN receiver",
+   "no_suggestion": null,
+   "device_id": 8748035,
+   "gnss2026_lag_ms": 110.3,
+   "gnss2026_applied_ms": 98.0335,
+   "lag_matches_gnss2026": true,
+   "health_ok": true
+  },
+  {
+   "log_id": "53a8335a-3705-4d98-acff-5d21cae8e6de",
+   "status": "off",
+   "reason": null,
+   "lag_ms": 189.5,
+   "param_ms": 110.0,
+   "param_name": "SENS_GNSS0_DELAY",
+   "d_ms": 79.5,
+   "innov": "agrees",
+   "suggest_ms": 190,
+   "delay_set_by": "parameter",
+   "no_suggestion": null,
+   "device_id": 10813445,
+   "gnss2026_lag_ms": 189.5,
+   "gnss2026_applied_ms": 110.0,
+   "lag_matches_gnss2026": true,
+   "health_ok": true
+  }
+ ],
+ "smoke_main_dronecan_lines": 3,
+ "skill_step1": [
+  "pip install numpy pyulog"
+ ],
+ "skill_step2": [
+  "python scripts/checkup.py path/to/flight.ulg --md report.md --json rows.jsonl"
+ ],
+ "skill_report_same_as_repo": true
+}

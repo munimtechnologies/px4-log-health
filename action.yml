@@ -20,7 +20,7 @@ inputs:
   gps-lag-ref:
     description: Commit of munimtechnologies/px4-gps-lag to take gps_lag.py and innov.py from.
     required: false
-    default: 967b5ad92d04ca6ac7e29684b411fbf5df243e05
+    default: f0b39b3eff9819c0e9cbbed5d23e3d50a639696b
 runs:
   using: composite
   steps:

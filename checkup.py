@@ -19,7 +19,9 @@ sensors module now moves each sample's timestamp_sample back by a delay per
 receiver, SENS_GPS0_DELAY or SENS_GPS1_DELAY (renamed SENS_GNSS0_DELAY /
 SENS_GNSS1_DELAY on main by PR #24399, 2026-09-29), or by a PPS correction,
 and EKF2 fuses the sample at that time. On those logs the delay is read from
-the log itself, as timestamp minus timestamp_sample.
+the log itself, as timestamp minus timestamp_sample. A GPS driver that
+stamps its own sample times overrides the delay parameter; DroneCAN receivers
+do since PR #27427 (v1.18 and main), and the report then says so (0.3.7).
 
     python checkup.py flight.ulg [more.ulg ...] [--md report.md] [--json rows.jsonl] [--fail-on-flag]
 
@@ -43,7 +45,7 @@ import sys
 
 import health
 
-__version__ = "0.3.6"
+__version__ = "0.3.7"
 
 OFF_MS = 50.0           # px4-gps-lag rule D1: suggest only when the lag is this far off the delay EKF2 assumed
 NEAR_MS = 40.0          # within OFF_MS but this close to it: say so, with one decimal
@@ -51,7 +53,11 @@ DELAY_TOL_MS = 1.0      # an applied delay this close to a SENS_*_DELAY came fro
 DEFAULT_DELAY_MS = 110.0  # PX4 v1.18+: used when SENS_GPSn_ID are set and none matches the receiver
 DELAY_TOPICS = ("vehicle_gps_position", "vehicle_gnss")
 NEW_TOPIC_REASON = ("this log uses PX4's newer vehicle_gnss topic (PX4 main since 2026-09-29), "
-                    "which gps_lag.py does not read yet")
+                    "which this copy of gps_lag.py does not read (px4-gps-lag 0.2.0 does; run fetch_deps.py)")
+DRONECAN_BUS = 3  # bits 0-2 of a PX4 device id are the bus type; 3 is UAVCAN (DroneCAN)
+DRONECAN_NOTE = ("this DroneCAN receiver's own time stamps set its sample times (PX4 PR #27427, in v1.18 "
+                 "and main), and PX4 then does not apply %sn_DELAY, so changing that parameter would not "
+                 "change when EKF2 fuses its samples")
 # px4-gps-lag studies/mismatch-2026/GRADE.md (pre-registered; D1 fired, M3 failed): 256 public logs,
 # 93 more than 50 ms off their setting. Median lift (log10 of the GPS velocity test ratio while
 # accelerating over steady flight) 0.4348 vs 0.24285; logs with any rejection 20.43% vs 15.95%,
@@ -229,6 +235,12 @@ def dynmodel_info(inputs):
     return {"value": value, "device_id": dev, "devtype": "0x%02X" % devtype, "note": value == 6}
 
 
+def _dronecan(a):
+    """True when applied_delay's receiver is on the DroneCAN (UAVCAN) bus."""
+    dev = (a or {}).get("device_id")
+    return dev is not None and (_u32(dev) & 0x7) == DRONECAN_BUS
+
+
 def gps_verdict(lag, inn, applied=None):
     """What to tell the user about the GPS delay of one log.
 
@@ -251,6 +263,8 @@ def gps_verdict(lag, inn, applied=None):
            "suggest_ms": None, "near_line": False}
     if used:
         out["applied"] = used
+        out["delay_set_by"] = ("parameter" if used.get("source") == "parameter"
+                               else "DroneCAN receiver" if _dronecan(used) else "PPS or GPS driver")
     if inn and inn.get("passed") and out["d_ms"]:
         x = inn["implied_excess_ms"]
         out["implied_ms"] = x
@@ -263,7 +277,9 @@ def gps_verdict(lag, inn, applied=None):
     else:
         out["status"] = "off"
         if out["innov"] != "disagrees":
-            if used and used.get("source") != "parameter":
+            if used and used.get("source") != "parameter" and _dronecan(used):
+                out["no_suggestion"] = DRONECAN_NOTE % used["prefix"]
+            elif used and used.get("source") != "parameter":
                 out["no_suggestion"] = ("the log's GPS sample times were set by PPS or the GPS driver, "
                                         "not by a delay parameter")
             else:
@@ -285,7 +301,8 @@ def check(path, baseline):
     if not g.get("skipped"):
         applied = applied_delay(**inputs) if inputs else None
         lag = g.get("lag") or {}
-        if inputs and inputs.get("topic") == "vehicle_gnss" and not lag.get("passed"):
+        if (inputs and inputs.get("topic") == "vehicle_gnss" and not lag.get("passed")
+                and "vehicle_gps_position" in str(lag.get("reason", ""))):
             g["lag"] = dict(lag, passed=False, reason="%s (%s)" % (NEW_TOPIC_REASON, lag.get("reason", "not run")))
         verdict = gps_verdict(g.get("lag"), g.get("innov"), applied)
     return {"log": path, "checkup": __version__, "health": h, "gps": g, "gps_verdict": verdict,
@@ -306,6 +323,9 @@ def _compare(v, near):
     diff = _signed(v["d_ms"], "%+.1f" if near else "%+.0f")
     if not a:
         return "; this vehicle's EKF2_GPS_DELAY is %.0f ms (%s ms)." % (v["param_ms"], diff)
+    if a.get("source") != "parameter" and _dronecan(a):
+        return ("; EKF2 fused this log's GPS samples %.0f ms before they arrived, a shift the DroneCAN "
+                "receiver's own time stamps set, not %sn_DELAY (%s ms)." % (v["param_ms"], a["prefix"], diff))
     if a.get("source") != "parameter":
         return ("; EKF2 fused this log's GPS samples %.0f ms before they arrived, a shift set by PPS or the "
                 "GPS driver rather than %sn_DELAY (%s ms)." % (v["param_ms"], a["prefix"], diff))

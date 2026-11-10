@@ -1,0 +1,27 @@
+{
+ "skill": "px4-log-health",
+ "license": "Apache-2.0",
+ "note": "Copies of px4-log-health v0.3.7 and px4-gps-lag 0.2.0 files; no code is fetched at run time.",
+ "files": {
+  "checkup.py": {
+   "from": "munimtechnologies/px4-log-health v0.3.7 /checkup.py",
+   "sha256": "30eff03792af851c09066e95ea69497c47cc74aa409f53229a416b7dc59e04d2"
+  },
+  "health.py": {
+   "from": "munimtechnologies/px4-log-health v0.3.7 /health.py",
+   "sha256": "407ccb0d60c1e88eb1c7f8e506a62a87882db79a8950ae7567d58775f45deff0"
+  },
+  "baseline.json": {
+   "from": "munimtechnologies/px4-log-health v0.3.7 /baseline.json",
+   "sha256": "a9a70d8cdd4c7c17a29ec4e364fe09161d05e862640ce930fc28537c7ab121c9"
+  },
+  "gps_lag.py": {
+   "from": "munimtechnologies/px4-gps-lag@f0b39b3eff9819c0e9cbbed5d23e3d50a639696b/gps_lag.py",
+   "sha256": "0070f3cbc1fa95f862e89e0f350947a5425f56843dcc9fc810a2c8ae41b9a90c"
+  },
+  "innov.py": {
+   "from": "munimtechnologies/px4-gps-lag@f0b39b3eff9819c0e9cbbed5d23e3d50a639696b/innov.py",
+   "sha256": "64625526298a14f3fb4a11d24a545788971625229f1b36b5fd3e289d73e657d6"
+  }
+ }
+}
