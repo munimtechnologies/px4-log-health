@@ -24,7 +24,7 @@ It prints one JSON line per log with each figure, the PX4 release, a list of pla
 
 `checkup.py` turns each log into a short Markdown report: the flags, a table of every figure with its place among 208 public flights, and a **GPS delay** verdict. The verdict measures how far the GPS lags the IMU with [px4-gps-lag](https://github.com/munimtechnologies/px4-gps-lag), compares that with the delay EKF2 assumed, and checks the direction against EKF2's own GPS velocity innovations. It suggests a new delay only when the measured lag is more than 50 ms off and the innovations don't point the other way. That is the rule px4-gps-lag's fleet studies support ([GRADE-innov-confirm.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/fleet-2026/GRADE-innov-confirm.md)). A suggested value is a starting point to check with EKF2 log replay, not a setting to fly.
 
-The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change. When a serial u-blox receiver runs `GPS_UBX_DYNMODEL` 6, the report adds one line about it (see 0.3.4 to 0.3.6 below).
+The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change. When a serial u-blox receiver runs `GPS_UBX_DYNMODEL` 6, the report adds one line about it (see 0.3.4 to 0.3.6 below). The report ends with a compass check: how much the compass follows the battery current (see 0.3.8 below).
 
 ```
 pip install numpy pyulog requests
@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/px4-log-health@v0.3.7
+      - uses: munimtechnologies/px4-log-health@v0.3.8
         with:
           logs: "**/*.ulg"          # space-separated globs
           fail-on-flag: "false"     # "true" fails the step on any flag or suggestion
@@ -74,6 +74,52 @@ npx skills add munimtechnologies/px4-log-health --skill px4-log-health
 
 The skill only runs the checker locally; it sends no log anywhere.
 
+## What changed in 0.3.8: a compass check
+
+- **Does motor current bend the compass?** PX4's docs and Flight Review's "Thrust and Magnetic
+  Field" plot say the strength (norm) of the measured magnetic field should stay constant in
+  flight; if it follows the battery current, the current in the power wiring is bending the
+  compass, and the heading estimate suffers. The report now ends with a **Compass** section.
+  `compass.py` fits, over the airborne part of the log, the norm of `vehicle_magnetometer`
+  instance 0 (the compass the estimator used, after calibration and any power compensation)
+  against the battery current. The coupling is the change of the norm over the flight's current
+  range (5th to 95th percentile), as a percentage of the median norm. Each flight is placed among
+  the 63 measurable public flights of the pre-registered census
+  [magcurrent-2026](studies/magcurrent-2026/GRADE.md):
+
+  | p10 | p25 | median | p75 | p90 |
+  |---|---|---|---|---|
+  | 0.51% | 1.27% | 3.72% | 12.96% | 21.56% |
+
+- **Strong coupling is a flag** (10% or more with |r| of 0.5 or more; 11 of the 63 census
+  flights, 17%). It points to PX4's [Compass Power Compensation](https://docs.px4.io/main/en/advanced_config/compass_power_compensation)
+  guide and suggests no parameter values; moving the compass away from power wiring is the
+  other fix. Moderate coupling (5% or more with |r| of 0.3 or more) is a note. With
+  `--fail-on-flag`, a compass flag now fails the run like any other flag.
+- **When it says "not checked".** The check needs a working current sensor and some current
+  range: the log's battery current must be valid, with a median of 0.5 A or more and a 5th-95th
+  percentile range of 5 A or more, and at least 30 s of airborne pairs. In the census, 58% of
+  downloaded logs fell short (most often a missing, flat or low current), so "not checked" is
+  common and is not a fault.
+- **Same figure as the census.** `compass.py` uses the census's measurement (`mag_logs.py`
+  0.1.0) unchanged, and a log gets the same coupling here as in the census's rows.
+- **Limits.** A badly calibrated compass also changes its norm with attitude, and hard
+  manoeuvres draw more current, so part of a strong coupling can be calibration error. PX4's
+  compass power compensation was on in 1 of 144 census logs. Public Flight Review uploads are
+  not a random sample, and 63 flights is a small sample.
+- The DroneCAN note of 0.3.7 is unchanged. px4-gps-lag's pre-registered test of whether
+  self-stamped DroneCAN receivers report their whole delay found too few public logs to grade
+  ([GRADE-ext.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/dronecan-2026/GRADE-ext.md)),
+  so checkup still adds no warning about it.
+
+How it was checked: a sealed run built 0.3.8 from 0.3.7 on `main` with exact edits
+(`studies/v038/job-diff.txt`), and passed every existing test, the new `test_checkup_038.py` and
+`compass.py`'s own synthetic tests. On the two PX4 PR #24831 logs and the three PX4 main logs of
+0.3.7, the report was the same as 0.3.7's apart from the version and the new Compass section.
+It then re-downloaded two census logs (one weak, one strong) and checkup's compass figures
+matched the census rows (`studies/v038/compass-census.json`). Finally it ran the agent skill's
+commands exactly as written, from the skill folder alone.
+
 ## What changed in 0.3.7: GPS verdicts on PX4 main logs, and DroneCAN receivers named
 
 - **PX4 main logs get a GPS delay verdict.** `fetch_deps.py` and the GitHub Action now take
@@ -88,9 +134,7 @@ The skill only runs the checker locally; it sends no log anywhere.
   `DroneCAN receiver`, or `PPS or GPS driver`), and for a DroneCAN receiver it says that changing
   the delay parameter would not change when EKF2 fuses its samples, so it suggests no value.
 - On the three DroneCAN receivers among the 11 public PX4 main logs in px4-gps-lag's gnss-2026
-  study, the measured lag was 12 to 83 ms later than the delay the receiver reported. Whether that
-  holds on other vehicles is being tested, pre-registered, in px4-gps-lag `studies/dronecan-2026`.
-  checkup adds no warning about it until that study is graded.
+  study, the measured lag was 12 to 83 ms later than the delay the receiver reported. Whether that holds on other vehicles was tested, pre-registered, in px4-gps-lag `studies/dronecan-2026`; too few public logs were found to grade it (see 0.3.8 above).
 - **The agent skill carries its own code.** `skills/px4-log-health/scripts/` holds checkup 0.3.7
   and the px4-gps-lag 0.2.0 files it needs, with their sha256 in `SOURCES.json`, so an agent runs
   it after `pip install numpy pyulog` without cloning or downloading anything else.
@@ -181,7 +225,7 @@ Six of ten health predictions held. Our priors on vibration and jamming were too
 ```
 pip install numpy pyulog ijson requests
 python fetch_deps.py      # gps_lag.py, innov.py, fleet.py and test_gps_lag.py from px4-gps-lag
-python -m unittest -v test_checkup test_checkup_dynmodel test_health test_gps_lag
+python -m unittest -v test_checkup test_checkup_dynmodel test_health test_checkup_037 test_checkup_038 test_compass test_gps_lag
 ```
 
 `smoke.py` re-measures three real logs from the study and checks them against the recorded figures. `smoke_checkup.py` does the same through `checkup.py` and the Action's script. Both download from Flight Review.

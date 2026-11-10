@@ -1,18 +1,22 @@
 {
  "skill": "px4-log-health",
  "license": "Apache-2.0",
- "note": "Copies of px4-log-health v0.3.7 and px4-gps-lag 0.2.0 files; no code is fetched at run time.",
+ "note": "Copies of px4-log-health v0.3.8 and px4-gps-lag 0.2.0 files; no code is fetched at run time.",
  "files": {
   "checkup.py": {
-   "from": "munimtechnologies/px4-log-health v0.3.7 /checkup.py",
-   "sha256": "30eff03792af851c09066e95ea69497c47cc74aa409f53229a416b7dc59e04d2"
+   "from": "munimtechnologies/px4-log-health v0.3.8 /checkup.py",
+   "sha256": "c35efab56cce947967d968afaa64ae62c97b65ab2d818c395c8de052d63ba1ad"
   },
   "health.py": {
-   "from": "munimtechnologies/px4-log-health v0.3.7 /health.py",
+   "from": "munimtechnologies/px4-log-health v0.3.8 /health.py",
    "sha256": "407ccb0d60c1e88eb1c7f8e506a62a87882db79a8950ae7567d58775f45deff0"
   },
+  "compass.py": {
+   "from": "munimtechnologies/px4-log-health v0.3.8 /compass.py",
+   "sha256": "f8a04ac4866322acc982f9fee83c1dfbd2706d5861c20392c0fb381330130f27"
+  },
   "baseline.json": {
-   "from": "munimtechnologies/px4-log-health v0.3.7 /baseline.json",
+   "from": "munimtechnologies/px4-log-health v0.3.8 /baseline.json",
    "sha256": "a9a70d8cdd4c7c17a29ec4e364fe09161d05e862640ce930fc28537c7ab121c9"
   },
   "gps_lag.py": {

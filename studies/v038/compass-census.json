@@ -1,0 +1,44 @@
+{
+ "compass": "0.1.0",
+ "checkup": "0.3.8",
+ "cases": [
+  {
+   "log": "0d86be6a-af24-415f-b499-c1d0de592050.ulg",
+   "level": "ok",
+   "coupling_pct": 2.689,
+   "class": "weak",
+   "fleet_place": "p25-p50",
+   "cal_mag_comp_typ": 0,
+   "text": "Compass barely moves with battery current: the field norm moves 2.7% over this flight's current range (21.9-31.0 A, r = 0.15); fleet place p25-p50 of 63 public PX4 flights.",
+   "why_not": null,
+   "order": 1,
+   "log_id": "0d86be6a-af24-415f-b499-c1d0de592050",
+   "census_pct": 2.689,
+   "census_class": "weak",
+   "expected_level": "ok",
+   "same_as_census": true,
+   "bytes": 24263255,
+   "sha256": "fd570a3fee42fbac94d4ebd976e996dd330ad5c2e5457828bfa78beb2a1c4f5a"
+  },
+  {
+   "log": "10457c04-f8e9-425c-9ad9-35d404e95439.ulg",
+   "level": "flag",
+   "coupling_pct": 17.015,
+   "class": "strong",
+   "fleet_place": "p75-p90",
+   "cal_mag_comp_typ": 0,
+   "text": "Compass tracks battery current: the field norm moves 17.0% over this flight's current range (36.5-46.5 A, r = 0.75); fleet place p75-p90 of 63 public PX4 flights. Motor current is bending the compass, which hurts the heading estimate. Move the compass away from power wiring, or see PX4's Compass Power Compensation guide: https://docs.px4.io/main/en/advanced_config/compass_power_compensation",
+   "why_not": null,
+   "order": 2,
+   "log_id": "10457c04-f8e9-425c-9ad9-35d404e95439",
+   "census_pct": 17.015,
+   "census_class": "strong",
+   "expected_level": "flag",
+   "same_as_census": true,
+   "bytes": 59934957,
+   "sha256": "479cde49f9b011dbd3207e160e62ecb8dc535909d5b2eb6af9270ac0931d43e4"
+  }
+ ],
+ "flag_lines": 1,
+ "ok": true
+}

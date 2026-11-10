@@ -1,0 +1,209 @@
+{
+ "pin": "f0b39b3eff9819c0e9cbbed5d23e3d50a639696b",
+ "steps": {
+  "fetch_deps": {
+   "cmd": "/usr/local/bin/python fetch_deps.py",
+   "exit": 0
+  },
+  "tests": {
+   "cmd": "/usr/local/bin/python -m unittest -v test_checkup test_checkup_dynmodel test_health test_checkup_037 test_checkup_038 test_compass test_gps_lag",
+   "exit": 0
+  },
+  "smoke_dyn": {
+   "cmd": "/usr/local/bin/python checkup.py /tmp/dyn/log_5_2025-5-27-11-50-34.ulg /tmp/dyn/log_8_2025-5-27-12-55-02.ulg --md /tmp/dyn-report.md --json /tmp/dyn-rows.jsonl",
+   "exit": 0
+  },
+  "smoke_main": {
+   "cmd": "/usr/local/bin/python checkup.py /data/px4main/5f1584c9-83ad-4d5e-97ac-46b3ed19f8e6.ulg /data/px4main/5548f136-8ecc-4b45-8c14-721bdf888a62.ulg /data/px4main/53a8335a-3705-4d98-acff-5d21cae8e6de.ulg --md /tmp/main-report.md --json /tmp/main-rows.jsonl",
+   "exit": 0
+  },
+  "census": {
+   "cmd": "/usr/local/bin/python checkup.py /data/magcensus/0d86be6a-af24-415f-b499-c1d0de592050.ulg /data/magcensus/10457c04-f8e9-425c-9ad9-35d404e95439.ulg --md /tmp/census-report.md --json /tmp/census-rows.jsonl",
+   "exit": 0
+  },
+  "skill_step1_0": {
+   "cmd": "pip install numpy pyulog",
+   "exit": 0
+  },
+  "skill_step2": {
+   "cmd": "python .claude/skills/px4-log-health/scripts/checkup.py /tmp/dyn/log_5_2025-5-27-11-50-34.ulg /tmp/dyn/log_8_2025-5-27-12-55-02.ulg --md report.md --json rows.jsonl",
+   "exit": 0
+  }
+ },
+ "ok": true,
+ "base": "428691c5b6196070ead376910118e1389e191a7c",
+ "tarball_sha256": "29ae8a2ac8a754afc96bdb171c18d6dcda4eb17c126e9f5738f766f4dd5d22b8",
+ "wait_tries": 1,
+ "edits": [
+  {
+   "n": 0,
+   "file": "checkup.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 1,
+   "file": "checkup.py",
+   "flags": [
+    "optional"
+   ],
+   "matches": 1
+  },
+  {
+   "n": 2,
+   "file": "checkup.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 3,
+   "file": "checkup.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 4,
+   "file": "checkup.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 5,
+   "file": "checkup.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 6,
+   "file": "test_checkup_dynmodel.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 7,
+   "file": "test_checkup_037.py",
+   "flags": [],
+   "matches": 1
+  }
+ ],
+ "readme": {
+  "section_inserted": true,
+  "action_tag": 1,
+  "checkup_intro": 1,
+  "tests_line": 1,
+  "dronecan_037": 1
+ },
+ "tests": [
+  "Ran 133 tests in 0.697s",
+  "OK"
+ ],
+ "smoke_dyn": {
+  "checkup": [
+   "0.3.8"
+  ],
+  "same_as_036_without_compass": true,
+  "compass_sections": 2,
+  "compass": [
+   {
+    "log": "log_5_2025-5-27-11-50-34.ulg",
+    "level": "ok",
+    "coupling_pct": 4.342,
+    "class": "weak",
+    "fleet_place": "p50-p75",
+    "cal_mag_comp_typ": 0,
+    "text": "Compass barely moves with battery current: the field norm moves 4.3% over this flight's current range (8.8-23.7 A, r = 0.35); fleet place p50-p75 of 63 public PX4 flights.",
+    "why_not": null
+   },
+   {
+    "log": "log_8_2025-5-27-12-55-02.ulg",
+    "level": "ok",
+    "coupling_pct": 1.882,
+    "class": "weak",
+    "fleet_place": "p25-p50",
+    "cal_mag_comp_typ": 0,
+    "text": "Compass barely moves with battery current: the field norm moves 1.9% over this flight's current range (8.7-21.2 A, r = 0.18); fleet place p25-p50 of 63 public PX4 flights.",
+    "why_not": null
+   }
+  ],
+  "gps_dynmodel": [
+   7,
+   6
+  ],
+  "lag_ms": [
+   110.5,
+   214.2
+  ]
+ },
+ "main_logs": {
+  "5f1584c9-83ad-4d5e-97ac-46b3ed19f8e6": {
+   "bytes": 11582978,
+   "sha256": "1be933d5f17d826f5838c79dbc992762427510695feebc1ec6b3212a24ffca7b",
+   "same_as_037": true
+  },
+  "5548f136-8ecc-4b45-8c14-721bdf888a62": {
+   "bytes": 75479314,
+   "sha256": "d6ef735fb67f49f5202d6dce5cf6a69242302685754c8300a20ac22a3f93dec5",
+   "same_as_037": true
+  },
+  "53a8335a-3705-4d98-acff-5d21cae8e6de": {
+   "bytes": 154051136,
+   "sha256": "14421d51fca926cc2a0dcea530e5d2bcd880c0d2462f404c05b33c326ee6d16c",
+   "same_as_037": true
+  }
+ },
+ "smoke_main": {
+  "same_as_037_without_compass": true,
+  "compass_sections": 3,
+  "compass": [
+   {
+    "log": "5f1584c9-83ad-4d5e-97ac-46b3ed19f8e6.ulg",
+    "level": "not checked",
+    "coupling_pct": null,
+    "class": null,
+    "fleet_place": null,
+    "cal_mag_comp_typ": 0,
+    "text": "Compass not checked: no valid battery current.",
+    "why_not": "no valid battery current"
+   },
+   {
+    "log": "5548f136-8ecc-4b45-8c14-721bdf888a62.ulg",
+    "level": "not checked",
+    "coupling_pct": null,
+    "class": null,
+    "fleet_place": null,
+    "cal_mag_comp_typ": 0,
+    "text": "Compass not checked: median airborne current under 0.5 A.",
+    "why_not": "median airborne current under 0.5 A"
+   },
+   {
+    "log": "53a8335a-3705-4d98-acff-5d21cae8e6de.ulg",
+    "level": "ok",
+    "coupling_pct": 0.016,
+    "class": "weak",
+    "fleet_place": "below p10",
+    "cal_mag_comp_typ": 0,
+    "text": "Compass barely moves with battery current: the field norm moves 0.0% over this flight's current range (23.4-32.7 A, r = -0.01); fleet place below p10 of 63 public PX4 flights.",
+    "why_not": null
+   }
+  ]
+ },
+ "census": {
+  "ok": true,
+  "same": [
+   true,
+   true
+  ],
+  "pct": [
+   2.689,
+   17.015
+  ],
+  "flag_lines": 1
+ },
+ "skill_step1": [
+  "pip install numpy pyulog"
+ ],
+ "skill_step2": [
+  "python scripts/checkup.py path/to/flight.ulg --md report.md --json rows.jsonl"
+ ],
+ "skill_report_same_as_repo": true
+}

@@ -23,6 +23,12 @@ the log itself, as timestamp minus timestamp_sample. A GPS driver that
 stamps its own sample times overrides the delay parameter; DroneCAN receivers
 do since PR #27427 (v1.18 and main), and the report then says so (0.3.7).
 
+When compass.py sits next to this file (it is in the repo and the skill), the
+report ends with a Compass section (0.3.8): how far the field norm of the
+compass the estimator used moves with battery current in flight, placed
+against 63 measurable public flights of the magcurrent-2026 census
+(studies/magcurrent-2026/GRADE.md). Strong coupling is a flag.
+
     python checkup.py flight.ulg [more.ulg ...] [--md report.md] [--json rows.jsonl] [--fail-on-flag]
 
 Markdown goes to --md (appended, so it can be $GITHUB_STEP_SUMMARY) or to
@@ -45,7 +51,7 @@ import sys
 
 import health
 
-__version__ = "0.3.7"
+__version__ = "0.3.8"
 
 OFF_MS = 50.0           # px4-gps-lag rule D1: suggest only when the lag is this far off the delay EKF2 assumed
 NEAR_MS = 40.0          # within OFF_MS but this close to it: say so, with one decimal
@@ -124,6 +130,19 @@ def run_gps(path):
         except Exception as exc:
             inn = {"passed": False, "reason": "error: %s" % str(exc)[:200]}
     return {"lag": lag, "innov": inn}
+
+
+def run_compass(path):
+    """compass.py's check of one log (studies/magcurrent-2026), or a 'not checked' result."""
+    try:
+        import compass
+    except ImportError:
+        return {"level": "not checked", "text": "Compass not checked: compass.py not found next to checkup.py."}
+    try:
+        return compass.check(path)
+    except Exception as exc:  # a log without the topics, or unreadable
+        return {"compass": getattr(compass, "__version__", None), "level": "not checked",
+                "text": "Compass not checked: %s: %s." % (type(exc).__name__, str(exc)[:200])}
 
 
 def read_delay_inputs(path):
@@ -306,7 +325,7 @@ def check(path, baseline):
             g["lag"] = dict(lag, passed=False, reason="%s (%s)" % (NEW_TOPIC_REASON, lag.get("reason", "not run")))
         verdict = gps_verdict(g.get("lag"), g.get("innov"), applied)
     return {"log": path, "checkup": __version__, "health": h, "gps": g, "gps_verdict": verdict,
-            "gps_dynmodel": dynmodel_info(inputs)}
+            "gps_dynmodel": dynmodel_info(inputs), "compass": run_compass(path)}
 
 
 def _num(x, spec="%.1f"):
@@ -447,6 +466,10 @@ def render(r):
             lines += [MISMATCH_NOTE, ""]
     if (r.get("gps_dynmodel") or {}).get("note"):
         lines += [DYNMODEL_NOTE, ""]
+    c = r.get("compass")
+    if c:
+        text = c.get("text") or "Compass not checked."
+        lines += ["### Compass", "", ("**Flag:** " + text) if c.get("level") == "flag" else text, ""]
     return "\n".join(lines)
 
 
@@ -456,7 +479,8 @@ def _plain(x):
 
 
 def flagged(r):
-    return bool((r["health"].get("flags") or []) or (r.get("gps_verdict") or {}).get("suggest_ms") is not None)
+    return bool((r["health"].get("flags") or []) or (r.get("gps_verdict") or {}).get("suggest_ms") is not None
+                or (r.get("compass") or {}).get("level") == "flag")
 
 
 def main(argv=None):

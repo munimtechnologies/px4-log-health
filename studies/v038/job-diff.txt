@@ -1,0 +1,731 @@
+--- a/checkup.py
++++ b/checkup.py
+@@ -23,6 +23,12 @@
+ stamps its own sample times overrides the delay parameter; DroneCAN receivers
+ do since PR #27427 (v1.18 and main), and the report then says so (0.3.7).
+ 
++When compass.py sits next to this file (it is in the repo and the skill), the
++report ends with a Compass section (0.3.8): how far the field norm of the
++compass the estimator used moves with battery current in flight, placed
++against 63 measurable public flights of the magcurrent-2026 census
++(studies/magcurrent-2026/GRADE.md). Strong coupling is a flag.
++
+     python checkup.py flight.ulg [more.ulg ...] [--md report.md] [--json rows.jsonl] [--fail-on-flag]
+ 
+ Markdown goes to --md (appended, so it can be $GITHUB_STEP_SUMMARY) or to
+@@ -45,7 +51,7 @@
+ 
+ import health
+ 
+-__version__ = "0.3.7"
++__version__ = "0.3.8"
+ 
+ OFF_MS = 50.0           # px4-gps-lag rule D1: suggest only when the lag is this far off the delay EKF2 assumed
+ NEAR_MS = 40.0          # within OFF_MS but this close to it: say so, with one decimal
+@@ -126,6 +132,19 @@
+     return {"lag": lag, "innov": inn}
+ 
+ 
++def run_compass(path):
++    """compass.py's check of one log (studies/magcurrent-2026), or a 'not checked' result."""
++    try:
++        import compass
++    except ImportError:
++        return {"level": "not checked", "text": "Compass not checked: compass.py not found next to checkup.py."}
++    try:
++        return compass.check(path)
++    except Exception as exc:  # a log without the topics, or unreadable
++        return {"compass": getattr(compass, "__version__", None), "level": "not checked",
++                "text": "Compass not checked: %s: %s." % (type(exc).__name__, str(exc)[:200])}
++
++
+ def read_delay_inputs(path):
+     """What applied_delay needs from one ULog: the initial parameters and, of
+     the first GNSS topic present, the driver's time stamps, the corrected
+@@ -306,7 +325,7 @@
+             g["lag"] = dict(lag, passed=False, reason="%s (%s)" % (NEW_TOPIC_REASON, lag.get("reason", "not run")))
+         verdict = gps_verdict(g.get("lag"), g.get("innov"), applied)
+     return {"log": path, "checkup": __version__, "health": h, "gps": g, "gps_verdict": verdict,
+-            "gps_dynmodel": dynmodel_info(inputs)}
++            "gps_dynmodel": dynmodel_info(inputs), "compass": run_compass(path)}
+ 
+ 
+ def _num(x, spec="%.1f"):
+@@ -447,6 +466,10 @@
+             lines += [MISMATCH_NOTE, ""]
+     if (r.get("gps_dynmodel") or {}).get("note"):
+         lines += [DYNMODEL_NOTE, ""]
++    c = r.get("compass")
++    if c:
++        text = c.get("text") or "Compass not checked."
++        lines += ["### Compass", "", ("**Flag:** " + text) if c.get("level") == "flag" else text, ""]
+     return "\n".join(lines)
+ 
+ 
+@@ -456,7 +479,8 @@
+ 
+ 
+ def flagged(r):
+-    return bool((r["health"].get("flags") or []) or (r.get("gps_verdict") or {}).get("suggest_ms") is not None)
++    return bool((r["health"].get("flags") or []) or (r.get("gps_verdict") or {}).get("suggest_ms") is not None
++                or (r.get("compass") or {}).get("level") == "flag")
+ 
+ 
+ def main(argv=None):
+--- a/test_checkup_dynmodel.py
++++ b/test_checkup_dynmodel.py
+@@ -37,7 +37,7 @@
+ 
+ class Info(unittest.TestCase):
+     def test_version(self):
+-        self.assertEqual(checkup.__version__, "0.3.7")
++        self.assertEqual(checkup.__version__, "0.3.8")
+ 
+     def test_device_id_layout(self):
+         self.assertEqual(F9P_SERIAL & 0x7, 5)
+--- a/test_checkup_037.py
++++ b/test_checkup_037.py
+@@ -43,7 +43,7 @@
+ 
+ class Version(unittest.TestCase):
+     def test_version(self):
+-        self.assertEqual(checkup.__version__, "0.3.7")
++        self.assertEqual(checkup.__version__, "0.3.8")
+ 
+ 
+ class DroneCAN(unittest.TestCase):
+--- a/README.md
++++ b/README.md
+@@ -24,7 +24,7 @@
+ 
+ `checkup.py` turns each log into a short Markdown report: the flags, a table of every figure with its place among 208 public flights, and a **GPS delay** verdict. The verdict measures how far the GPS lags the IMU with [px4-gps-lag](https://github.com/munimtechnologies/px4-gps-lag), compares that with the delay EKF2 assumed, and checks the direction against EKF2's own GPS velocity innovations. It suggests a new delay only when the measured lag is more than 50 ms off and the innovations don't point the other way. That is the rule px4-gps-lag's fleet studies support ([GRADE-innov-confirm.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/fleet-2026/GRADE-innov-confirm.md)). A suggested value is a starting point to check with EKF2 log replay, not a setting to fly.
+ 
+-The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change. When a serial u-blox receiver runs `GPS_UBX_DYNMODEL` 6, the report adds one line about it (see 0.3.4 to 0.3.6 below).
++The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change. When a serial u-blox receiver runs `GPS_UBX_DYNMODEL` 6, the report adds one line about it (see 0.3.4 to 0.3.6 below). The report ends with a compass check: how much the compass follows the battery current (see 0.3.8 below).
+ 
+ ```
+ pip install numpy pyulog requests
+@@ -54,7 +54,7 @@
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+-      - uses: munimtechnologies/px4-log-health@v0.3.7
++      - uses: munimtechnologies/px4-log-health@v0.3.8
+         with:
+           logs: "**/*.ulg"          # space-separated globs
+           fail-on-flag: "false"     # "true" fails the step on any flag or suggestion
+@@ -73,6 +73,52 @@
+ ```
+ 
+ The skill only runs the checker locally; it sends no log anywhere.
++
++## What changed in 0.3.8: a compass check
++
++- **Does motor current bend the compass?** PX4's docs and Flight Review's "Thrust and Magnetic
++  Field" plot say the strength (norm) of the measured magnetic field should stay constant in
++  flight; if it follows the battery current, the current in the power wiring is bending the
++  compass, and the heading estimate suffers. The report now ends with a **Compass** section.
++  `compass.py` fits, over the airborne part of the log, the norm of `vehicle_magnetometer`
++  instance 0 (the compass the estimator used, after calibration and any power compensation)
++  against the battery current. The coupling is the change of the norm over the flight's current
++  range (5th to 95th percentile), as a percentage of the median norm. Each flight is placed among
++  the 63 measurable public flights of the pre-registered census
++  [magcurrent-2026](studies/magcurrent-2026/GRADE.md):
++
++  | p10 | p25 | median | p75 | p90 |
++  |---|---|---|---|---|
++  | 0.51% | 1.27% | 3.72% | 12.96% | 21.56% |
++
++- **Strong coupling is a flag** (10% or more with |r| of 0.5 or more; 11 of the 63 census
++  flights, 17%). It points to PX4's [Compass Power Compensation](https://docs.px4.io/main/en/advanced_config/compass_power_compensation)
++  guide and suggests no parameter values; moving the compass away from power wiring is the
++  other fix. Moderate coupling (5% or more with |r| of 0.3 or more) is a note. With
++  `--fail-on-flag`, a compass flag now fails the run like any other flag.
++- **When it says "not checked".** The check needs a working current sensor and some current
++  range: the log's battery current must be valid, with a median of 0.5 A or more and a 5th-95th
++  percentile range of 5 A or more, and at least 30 s of airborne pairs. In the census, 58% of
++  downloaded logs fell short (most often a missing, flat or low current), so "not checked" is
++  common and is not a fault.
++- **Same figure as the census.** `compass.py` uses the census's measurement (`mag_logs.py`
++  0.1.0) unchanged, and a log gets the same coupling here as in the census's rows.
++- **Limits.** A badly calibrated compass also changes its norm with attitude, and hard
++  manoeuvres draw more current, so part of a strong coupling can be calibration error. PX4's
++  compass power compensation was on in 1 of 144 census logs. Public Flight Review uploads are
++  not a random sample, and 63 flights is a small sample.
++- The DroneCAN note of 0.3.7 is unchanged. px4-gps-lag's pre-registered test of whether
++  self-stamped DroneCAN receivers report their whole delay found too few public logs to grade
++  ([GRADE-ext.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/dronecan-2026/GRADE-ext.md)),
++  so checkup still adds no warning about it.
++
++How it was checked: a sealed run built 0.3.8 from 0.3.7 on `main` with exact edits
++(`studies/v038/job-diff.txt`), and passed every existing test, the new `test_checkup_038.py` and
++`compass.py`'s own synthetic tests. On the two PX4 PR #24831 logs and the three PX4 main logs of
++0.3.7, the report was the same as 0.3.7's apart from the version and the new Compass section.
++It then re-downloaded two census logs (one weak, one strong) and checkup's compass figures
++matched the census rows (`studies/v038/compass-census.json`). Finally it ran the agent skill's
++commands exactly as written, from the skill folder alone.
+ 
+ ## What changed in 0.3.7: GPS verdicts on PX4 main logs, and DroneCAN receivers named
+ 
+@@ -88,9 +134,7 @@
+   `DroneCAN receiver`, or `PPS or GPS driver`), and for a DroneCAN receiver it says that changing
+   the delay parameter would not change when EKF2 fuses its samples, so it suggests no value.
+ - On the three DroneCAN receivers among the 11 public PX4 main logs in px4-gps-lag's gnss-2026
+-  study, the measured lag was 12 to 83 ms later than the delay the receiver reported. Whether that
+-  holds on other vehicles is being tested, pre-registered, in px4-gps-lag `studies/dronecan-2026`.
+-  checkup adds no warning about it until that study is graded.
++  study, the measured lag was 12 to 83 ms later than the delay the receiver reported. Whether that holds on other vehicles was tested, pre-registered, in px4-gps-lag `studies/dronecan-2026`; too few public logs were found to grade it (see 0.3.8 above).
+ - **The agent skill carries its own code.** `skills/px4-log-health/scripts/` holds checkup 0.3.7
+   and the px4-gps-lag 0.2.0 files it needs, with their sha256 in `SOURCES.json`, so an agent runs
+   it after `pip install numpy pyulog` without cloning or downloading anything else.
+@@ -181,7 +225,7 @@
+ ```
+ pip install numpy pyulog ijson requests
+ python fetch_deps.py      # gps_lag.py, innov.py, fleet.py and test_gps_lag.py from px4-gps-lag
+-python -m unittest -v test_checkup test_checkup_dynmodel test_health test_gps_lag
++python -m unittest -v test_checkup test_checkup_dynmodel test_health test_checkup_037 test_checkup_038 test_compass test_gps_lag
+ ```
+ 
+ `smoke.py` re-measures three real logs from the study and checks them against the recorded figures. `smoke_checkup.py` does the same through `checkup.py` and the Action's script. Both download from Flight Review.
+--- /dev/null
++++ b/compass.py
+@@ -0,0 +1,306 @@
++"""compass.py: does motor current bend this flight's compass? (px4-log-health compass check)
++
++PX4's docs and Flight Review's 'Thrust and Magnetic Field' plot say the norm of the measured
++magnetic field should stay constant in flight. If it tracks the battery current, the current in
++the power wiring is bending the compass and the yaw estimate suffers. This check fits, over the
++airborne part of one ULog, the norm of vehicle_magnetometer instance 0 (PX4's calibrated and, if
++enabled, power-compensated field) against the battery current: norm = a + b * current. The
++coupling is |b| times the flight's current range (5th to 95th percentile) as a percentage of the
++median norm, and it is placed against 63 measurable public PX4 flights from the pre-registered
++census magcurrent-2026 (studies/magcurrent-2026/GRADE.md).
++
++The measurement is the census's own (mag_logs.py 0.1.0), copied unchanged, so a log gets the same
++figure here as in the census. It suggests no parameter values: the fix is to move the compass away
++from power wiring, or to follow PX4's Compass Power Compensation guide.
++
++    python compass.py flight.ulg [more.ulg ...] [--json]
++
++Needs numpy and pyulog. By MV2 of Munim, Inc. (mv2@munimtech.com); written with AI agents.
++Apache-2.0.
++"""
++
++import argparse
++import json
++import sys
++
++__version__ = "0.1.0"
++
++GUIDE = "https://docs.px4.io/main/en/advanced_config/compass_power_compensation"
++TOPICS = ("vehicle_magnetometer", "battery_status", "vehicle_land_detected", "vehicle_status",
++          "vehicle_thrust_setpoint")
++
++# one log's measurement (as in the census, mag_logs.py 0.1.0)
++MIN_PAIRS = 150             # 30 s of airborne pairs at the default 5 Hz
++MIN_RANGE_A = 5.0
++MIN_CURRENT_A = 0.5
++MAX_GAP_S = 0.5
++STRONG_PCT, STRONG_R = 10.0, 0.5
++MODERATE_PCT, MODERATE_R = 5.0, 0.3
++
++# coupling % on the 63 measurable flights of magcurrent-2026 (mag-summary.json, pct_quantiles)
++FLEET = {"source": "magcurrent-2026: 63 measurable public PX4 flights (Flight Review, read 2026-11-09)",
++         "n": 63, "p10": 0.507, "p25": 1.265, "p50": 3.724, "p75": 12.963, "p90": 21.557,
++         "strong_share": 0.1746}
++CUTS = ("p10", "p25", "p50", "p75", "p90")
++
++
++def bus_name(dev):
++    return {0: "unknown", 1: "i2c", 2: "spi", 3: "uavcan", 4: "simulation", 5: "serial",
++            6: "mavlink"}.get(int(dev) & 0x7, "unknown")
++
++
++def most_common_id(ids):
++    if ids is None:
++        return None
++    ids = [int(x) & 0xFFFFFFFF for x in ids if int(x)]
++    if not ids:
++        return None
++    return max(sorted(set(ids)), key=ids.count)
++
++
++def airborne_mask(t, land=None, status=None):
++    """(mask, source): True at each time in `t` (us) while airborne. land: (timestamps, landed) from
++    vehicle_land_detected; status: (timestamps, arming_state) from vehicle_status, used only without
++    land (armed = 2). (None, 'none') if neither is given."""
++    import numpy as np
++    t = np.asarray(t, dtype=np.int64)
++    if land is not None and len(land[0]):
++        ts = np.asarray(land[0], dtype=np.int64)
++        flying = np.asarray(land[1]).astype(np.int64) == 0
++        source = "land_detected"
++    elif status is not None and len(status[0]):
++        ts = np.asarray(status[0], dtype=np.int64)
++        flying = np.asarray(status[1]).astype(np.int64) == 2
++        source = "armed"
++    else:
++        return None, "none"
++    idx = np.searchsorted(ts, t, side="right") - 1
++    ok = idx >= 0
++    mask = np.zeros(len(t), dtype=bool)
++    mask[ok] = flying[idx[ok]]
++    return mask, source
++
++
++def paired(tm, tb, values, max_gap_s=MAX_GAP_S):
++    """(keep, v): `values` (sampled at tb, us) linearly interpolated at the times tm; keep is False
++    where tm is outside tb's span or the nearest sample of tb is more than max_gap_s away."""
++    import numpy as np
++    tm = np.asarray(tm, dtype=np.float64)
++    tb = np.asarray(tb, dtype=np.float64)
++    values = np.asarray(values, dtype=np.float64)
++    i = np.searchsorted(tb, tm)
++    lo = np.clip(i - 1, 0, len(tb) - 1)
++    hi = np.clip(i, 0, len(tb) - 1)
++    gap = np.minimum(np.abs(tm - tb[lo]), np.abs(tb[hi] - tm))
++    keep = (gap <= max_gap_s * 1e6) & (tm >= tb[0]) & (tm <= tb[-1])
++    return keep, np.interp(tm, tb, values)
++
++
++def coupling(x, norm):
++    """Least-squares norm = a + b * x. pct = |b| * (x's 95th - 5th percentile) / median norm * 100."""
++    import numpy as np
++    x = np.asarray(x, dtype=np.float64)
++    n = np.asarray(norm, dtype=np.float64)
++    p5, p95 = (float(v) for v in np.percentile(x, [5, 95]))
++    med = float(np.median(n))
++    out = {"pairs": int(len(x)), "x_p5": round(p5, 3), "x_p95": round(p95, 3),
++           "x_median": round(float(np.median(x)), 3), "median_ga": round(med, 4)}
++    if len(x) < 3 or float(np.std(x)) == 0.0 or float(np.std(n)) == 0.0 or med <= 0:
++        out.update({"slope_ga": None, "r": None, "pct": None})
++        return out
++    b, a = (float(v) for v in np.polyfit(x, n, 1))
++    r = float(np.corrcoef(x, n)[0, 1])
++    out.update({"slope_ga": round(b, 7), "intercept_ga": round(a, 5), "r": round(r, 4),
++                "pct": round(abs(b) * (p95 - p5) / med * 100.0, 3)})
++    return out
++
++
++def classify(c):
++    """'strong', 'moderate' or 'weak' coupling, or None without a fit."""
++    if not c or c.get("pct") is None or c.get("r") is None:
++        return None
++    if c["pct"] >= STRONG_PCT and abs(c["r"]) >= STRONG_R:
++        return "strong"
++    if c["pct"] >= MODERATE_PCT and abs(c["r"]) >= MODERATE_R:
++        return "moderate"
++    return "weak"
++
++
++def pick_battery(bats):
++    """multi_id of the battery_status instance with the highest median valid current, or None."""
++    import numpy as np
++    best = None
++    for mid in sorted(bats):
++        b = bats[mid]
++        if "current_a" not in b or "timestamp" not in b:
++            continue
++        c = np.asarray(b["current_a"], dtype=np.float64)
++        ok = np.isfinite(c) & (c >= 0)
++        if int(np.sum(ok)) < 2:
++            continue
++        med = float(np.median(c[ok]))
++        if best is None or med > best[0]:
++            best = (med, mid)
++    return None if best is None else best[1]
++
++
++def measure_data(data):
++    """The census's measurement of one log, from {topic: {multi_id: {field: array}}}. As in
++    mag_logs.py 0.1.0, without the fields this check does not use (is_external, mag_test_ratio)."""
++    import numpy as np
++    mags = data.get("vehicle_magnetometer") or {}
++    out = {"mag_instances": len(mags)}
++    mag = mags.get(0)
++    if not mag or "magnetometer_ga[0]" not in mag:
++        out["read"] = "no vehicle_magnetometer data"
++        return out
++    tm = np.asarray(mag["timestamp"], dtype=np.int64)
++    norm = np.sqrt(sum(np.asarray(mag["magnetometer_ga[%d]" % k], dtype=np.float64) ** 2 for k in range(3)))
++    dev = most_common_id(mag.get("device_id"))
++    if dev:
++        out.update({"device_id": dev, "bus": bus_name(dev), "devtype": "0x%02X" % ((dev >> 16) & 0xFF)})
++    ld = (data.get("vehicle_land_detected") or {}).get(0)
++    st = (data.get("vehicle_status") or {}).get(0)
++    land = (ld["timestamp"], ld["landed"]) if ld and "landed" in ld else None
++    status = (st["timestamp"], st["arming_state"]) if st and "arming_state" in st else None
++    mask, source = airborne_mask(tm, land, status)
++    out["airborne_from"] = source
++    out["read"] = "ok"
++    if mask is None:
++        out["measurable"] = False
++        out["why_not"] = "no flight state"
++        return out
++    dt = float(np.median(np.diff(tm))) / 1e6 if len(tm) > 1 else 0.0
++    out["airborne_s"] = round(float(np.sum(mask)) * dt, 1)
++    good = mask & np.isfinite(norm) & (norm > 0)
++    ts = (data.get("vehicle_thrust_setpoint") or {}).get(0)
++    if ts and "xyz[0]" in ts and len(ts["timestamp"]) > 1:
++        thr = np.sqrt(sum(np.asarray(ts["xyz[%d]" % k], dtype=np.float64) ** 2 for k in range(3)))
++        keep_t, thr_at = paired(tm, ts["timestamp"], thr)
++        k = good & keep_t & np.isfinite(thr_at)
++        if int(np.sum(k)) >= MIN_PAIRS:
++            out["thrust_coupling"] = coupling(thr_at[k], norm[k])
++    bats = data.get("battery_status") or {}
++    mid = pick_battery(bats)
++    if mid is None:
++        out["measurable"] = False
++        out["why_not"] = "no valid battery current"
++        return out
++    b = bats[mid]
++    cur = np.asarray(b["current_a"], dtype=np.float64)
++    ok = np.isfinite(cur) & (cur >= 0)
++    keep, cur_at = paired(tm, np.asarray(b["timestamp"], dtype=np.int64)[ok], cur[ok])
++    k = good & keep
++    out["battery_instance"] = int(mid)
++    out["pairs"] = int(np.sum(k))
++    if out["pairs"] < MIN_PAIRS:
++        out["measurable"] = False
++        out["why_not"] = "fewer than %d airborne pairs" % MIN_PAIRS
++        return out
++    c = coupling(cur_at[k], norm[k])
++    out["coupling"] = c
++    if c["x_median"] < MIN_CURRENT_A:
++        out["measurable"] = False
++        out["why_not"] = "median airborne current under %.1f A" % MIN_CURRENT_A
++        return out
++    if c["x_p95"] - c["x_p5"] < MIN_RANGE_A:
++        out["measurable"] = False
++        out["why_not"] = "current range under %.0f A" % MIN_RANGE_A
++        return out
++    if c["pct"] is None:
++        out["measurable"] = False
++        out["why_not"] = "no fit"
++        return out
++    out["measurable"] = True
++    out["class"] = classify(c)
++    return out
++
++
++def fleet_place(pct, fleet=FLEET):
++    """Where `pct` falls among the census flights: 'below p10', 'p10-p25', ..., 'above p90'."""
++    if pct is None:
++        return None
++    prev = None
++    for k in CUTS:
++        if pct < fleet[k]:
++            return "below p10" if prev is None else "%s-%s" % (prev, k)
++        prev = k
++    return "above p90"
++
++
++def verdict(m, comp_type=None):
++    """(level, text) for one measurement. level: 'flag', 'note', 'ok' or 'not checked'."""
++    if m.get("read") != "ok":
++        return "not checked", "Compass not checked: %s." % m.get("read")
++    if not m.get("measurable"):
++        return "not checked", "Compass not checked: %s." % m.get("why_not")
++    c = m["coupling"]
++    place = fleet_place(c["pct"])
++    what = ("the field norm moves %.1f%% over this flight's current range (%.1f-%.1f A, r = %.2f); "
++            "fleet place %s of %d public PX4 flights"
++            % (c["pct"], c["x_p5"], c["x_p95"], c["r"], place, FLEET["n"]))
++    after = " (after PX4's power compensation, which is on)" if comp_type else ""
++    cls = m.get("class")
++    if cls == "strong":
++        return "flag", ("Compass tracks battery current%s: %s. Motor current is bending the compass, "
++                        "which hurts the heading estimate. Move the compass away from power wiring, "
++                        "or see PX4's Compass Power Compensation guide: %s" % (after, what, GUIDE))
++    if cls == "moderate":
++        return "note", ("Compass moves with battery current%s: %s. Worth a look at Flight Review's "
++                        "'Thrust and Magnetic Field' plot." % (after, what))
++    return "ok", "Compass barely moves with battery current%s: %s." % (after, what)
++
++
++def read_log(path):
++    """({topic: {multi_id: {field: array}}}, CAL_MAG_COMP_TYP or None) from one ULog."""
++    from pyulog import ULog
++    u = ULog(path, list(TOPICS), True)
++    data = {}
++    for d in u.data_list:
++        data.setdefault(d.name, {})[d.multi_id] = d.data
++    comp = u.initial_parameters.get("CAL_MAG_COMP_TYP")
++    return data, (None if comp is None else int(comp))
++
++
++def check(path):
++    """The compass check of one ULog: measurement, level, text and fleet place."""
++    data, comp = read_log(path)
++    m = measure_data(data)
++    level, text = verdict(m, comp)
++    pct = (m.get("coupling") or {}).get("pct") if m.get("measurable") else None
++    return {"compass": __version__, "level": level, "text": text, "coupling_pct": pct,
++            "class": m.get("class"), "fleet_place": fleet_place(pct), "cal_mag_comp_typ": comp,
++            "measure": m}
++
++
++def _plain(o):
++    if hasattr(o, "item"):
++        return o.item()
++    if hasattr(o, "tolist"):
++        return o.tolist()
++    return str(o)
++
++
++def main(argv=None):
++    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
++    ap.add_argument("logs", nargs="+")
++    ap.add_argument("--json", action="store_true", help="print JSON instead of text")
++    args = ap.parse_args(argv)
++    results = []
++    for p in args.logs:
++        try:
++            r = check(p)
++        except Exception as exc:
++            r = {"compass": __version__, "level": "not checked",
++                 "text": "Compass not checked: %s: %s" % (type(exc).__name__, str(exc)[:200])}
++        r["log"] = p
++        results.append(r)
++        if not args.json:
++            print("%s\n  [%s] %s" % (p, r["level"], r["text"]))
++    if args.json:
++        print(json.dumps(results, indent=1, default=_plain))
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+--- /dev/null
++++ b/test_compass.py
+@@ -0,0 +1,123 @@
++"""Synthetic tests for compass.py (no flight log needed). By MV2 of Munim, Inc.; written with AI
++agents. Apache-2.0."""
++
++import unittest
++
++import numpy as np
++
++import compass as cp
++
++
++def flight(slope, current_fn, n=500, landed=0, with_battery=True):
++    """5 Hz compass and battery samples for n samples; norm = 0.5 + slope * current."""
++    t = np.arange(n, dtype=np.int64) * 200000
++    cur = np.array([current_fn(i) for i in range(n)], dtype=np.float64)
++    norm = 0.5 + slope * cur
++    zeros = np.zeros(n)
++    data = {"vehicle_magnetometer": {0: {"timestamp": t, "magnetometer_ga[0]": norm,
++                                         "magnetometer_ga[1]": zeros, "magnetometer_ga[2]": zeros,
++                                         "device_id": np.full(n, 0x00070109)}},
++            "vehicle_land_detected": {0: {"timestamp": np.array([0], dtype=np.int64),
++                                          "landed": np.array([landed])}}}
++    if with_battery:
++        data["battery_status"] = {0: {"timestamp": t, "current_a": cur}}
++    return data
++
++
++def ramp(i):
++    return 5.0 + 0.2 * (i % 50)
++
++
++class Coupling(unittest.TestCase):
++    def test_strong_line(self):
++        x = np.linspace(0.0, 20.0, 201)          # p5 = 1.0, p95 = 19.0
++        c = cp.coupling(x, 0.5 + 0.005 * x)       # median norm 0.55
++        self.assertAlmostEqual(c["pct"], 16.364, places=3)   # 0.005 * 18 / 0.55 * 100
++        self.assertAlmostEqual(c["r"], 1.0, places=4)
++        self.assertEqual(cp.classify(c), "strong")
++
++    def test_moderate_and_weak(self):
++        x = np.linspace(0.0, 20.0, 201)
++        c = cp.coupling(x, 0.5 + 0.002 * x)       # 0.036 / 0.52 * 100 = 6.923
++        self.assertAlmostEqual(c["pct"], 6.923, places=3)
++        self.assertEqual(cp.classify(c), "moderate")
++        c = cp.coupling(x, 0.5 + 0.0001 * x)      # 0.0018 / 0.501 * 100 = 0.359
++        self.assertAlmostEqual(c["pct"], 0.359, places=3)
++        self.assertEqual(cp.classify(c), "weak")
++
++    def test_no_fit_on_constant_current(self):
++        c = cp.coupling(np.full(10, 3.0), np.linspace(0.4, 0.5, 10))
++        self.assertIsNone(c["pct"])
++        self.assertIsNone(cp.classify(c))
++
++
++class Helpers(unittest.TestCase):
++    def test_airborne_mask(self):
++        mask, src = cp.airborne_mask([-10, 50, 150, 250], ([0, 100, 200], [1, 0, 1]))
++        self.assertEqual(list(mask), [False, False, True, False])
++        self.assertEqual(src, "land_detected")
++        mask, src = cp.airborne_mask([5, 15], None, ([0, 10], [1, 2]))
++        self.assertEqual(list(mask), [False, True])
++        self.assertEqual(src, "armed")
++        self.assertEqual(cp.airborne_mask([1], None, None), (None, "none"))
++
++    def test_paired(self):
++        keep, v = cp.paired([0.5e6, 1.5e6, 3e6], [0, 1e6, 2e6], [0, 10, 20])
++        self.assertEqual(list(keep), [True, True, False])
++        self.assertEqual(list(v[:2]), [5.0, 15.0])
++
++    def test_fleet_place(self):
++        self.assertEqual(cp.fleet_place(0.359), "below p10")
++        self.assertEqual(cp.fleet_place(0.507), "p10-p25")
++        self.assertEqual(cp.fleet_place(3.0), "p25-p50")
++        self.assertEqual(cp.fleet_place(16.364), "p75-p90")
++        self.assertEqual(cp.fleet_place(98.1), "above p90")
++        self.assertIsNone(cp.fleet_place(None))
++
++    def test_bus_and_id(self):
++        self.assertEqual(cp.bus_name(0x00070109), "i2c")
++        self.assertEqual(cp.most_common_id([0, 5, 7, 7]), 7)
++        self.assertIsNone(cp.most_common_id([0, 0]))
++
++
++class Measure(unittest.TestCase):
++    def test_strong_flight(self):
++        m = cp.measure_data(flight(0.01, ramp))
++        self.assertTrue(m["measurable"])
++        self.assertEqual(m["pairs"], 500)
++        c = m["coupling"]
++        self.assertAlmostEqual(c["slope_ga"], 0.01, places=6)
++        self.assertEqual((c["x_p5"], c["x_p95"], c["x_median"]), (5.4, 14.4, 9.9))
++        self.assertAlmostEqual(c["pct"], 15.025, places=2)   # 0.01 * 9.0 / 0.599 * 100
++        self.assertEqual(m["class"], "strong")
++        self.assertEqual(m["bus"], "i2c")
++        level, text = cp.verdict(m)
++        self.assertEqual(level, "flag")
++        self.assertIn(cp.GUIDE, text)
++        self.assertIn("p75-p90", text)
++        self.assertNotIn("after PX4's power compensation", text)
++        self.assertIn("after PX4's power compensation", cp.verdict(m, 2)[1])
++
++    def test_weak_flight(self):
++        m = cp.measure_data(flight(0.0002, ramp))
++        self.assertEqual(m["class"], "weak")
++        self.assertEqual(cp.verdict(m)[0], "ok")
++
++    def test_not_measurable(self):
++        m = cp.measure_data(flight(0.01, lambda i: 0.2 + 0.001 * (i % 2)))
++        self.assertFalse(m["measurable"])
++        self.assertEqual(m["why_not"], "median airborne current under 0.5 A")
++        self.assertEqual(cp.verdict(m)[0], "not checked")
++        m = cp.measure_data(flight(0.01, lambda i: 10.0 + 0.1 * (i % 20)))
++        self.assertEqual(m["why_not"], "current range under 5 A")
++        m = cp.measure_data(flight(0.01, ramp, with_battery=False))
++        self.assertEqual(m["why_not"], "no valid battery current")
++        m = cp.measure_data(flight(0.01, ramp, landed=1))
++        self.assertEqual(m["why_not"], "fewer than 150 airborne pairs")
++        m = cp.measure_data({})
++        self.assertEqual(m["read"], "no vehicle_magnetometer data")
++        self.assertEqual(cp.verdict(m)[0], "not checked")
++
++
++if __name__ == "__main__":
++    unittest.main()
+--- /dev/null
++++ b/test_checkup_038.py
+@@ -0,0 +1,104 @@
++"""Tests for checkup 0.3.8: the compass check (compass.py, from the pre-registered magcurrent-2026
++census) joins the report as a last section, and a strong coupling counts as a flag.
++
++By MV2 of Munim, Inc.; written with AI agents. Apache-2.0."""
++import json
++import sys
++import types
++import unittest
++from unittest import mock
++
++import checkup
++
++QUIET = {"health_ok": False, "health_reason": "under 60 s in the air"}
++FLAG = {"compass": "0.1.0", "level": "flag", "text": "Compass tracks battery current: X.", "coupling_pct": 17.0,
++        "class": "strong", "fleet_place": "p75-p90", "cal_mag_comp_typ": 0}
++NOTE = dict(FLAG, level="note", text="Compass moves with battery current: Y.", **{"class": "moderate"})
++OK = dict(FLAG, level="ok", text="Compass barely moves with battery current: Z.", **{"class": "weak"})
++
++
++def report(compass=None):
++    r = {"log": "/logs/a.ulg", "checkup": checkup.__version__, "health": dict(QUIET),
++         "gps": {"skipped": "gps_lag.py and innov.py not found (run fetch_deps.py)"}, "gps_verdict": None}
++    if compass is not None:
++        r["compass"] = compass
++    return r
++
++
++class Version(unittest.TestCase):
++    def test_version(self):
++        self.assertEqual(checkup.__version__, "0.3.8")
++
++
++class Render(unittest.TestCase):
++    def test_section_comes_last(self):
++        md = checkup.render(report(OK))
++        self.assertIn("### Compass\n\nCompass barely moves with battery current: Z.\n", md)
++        self.assertLess(md.index("### GPS delay"), md.index("### Compass"))
++        self.assertTrue(md.endswith("Compass barely moves with battery current: Z.\n"))
++
++    def test_flag_is_marked(self):
++        md = checkup.render(report(FLAG))
++        self.assertIn("### Compass\n\n**Flag:** Compass tracks battery current: X.\n", md)
++        self.assertNotIn("**Flag:**", checkup.render(report(NOTE)))
++
++    def test_old_rows_have_no_section(self):
++        md = checkup.render(report())
++        self.assertNotIn("Compass", md)
++
++    def test_removing_the_section_gives_the_037_text(self):
++        # build.py compares reports with 0.3.7's this way
++        import re
++        with_c = checkup.render(report(FLAG))
++        without = checkup.render(report())
++        self.assertEqual(re.sub(r"\n### Compass\n\n[^\n]*\n", "", with_c), without)
++
++
++class Flagged(unittest.TestCase):
++    def test_strong_coupling_is_a_flag(self):
++        self.assertTrue(checkup.flagged(report(FLAG)))
++
++    def test_note_ok_and_missing_are_not(self):
++        for c in (NOTE, OK, {"level": "not checked", "text": "Compass not checked: x."}, None):
++            self.assertFalse(checkup.flagged(report(c)), c)
++
++
++class RunCompass(unittest.TestCase):
++    def test_missing_module(self):
++        with mock.patch.dict(sys.modules, {"compass": None}):
++            c = checkup.run_compass("a.ulg")
++        self.assertEqual(c["level"], "not checked")
++        self.assertIn("compass.py not found", c["text"])
++
++    def test_module_result_is_passed_through(self):
++        fake = types.SimpleNamespace(__version__="0.1.0", check=lambda p: dict(OK, log_seen=p))
++        with mock.patch.dict(sys.modules, {"compass": fake}):
++            c = checkup.run_compass("a.ulg")
++        self.assertEqual((c["level"], c["log_seen"]), ("ok", "a.ulg"))
++
++    def test_an_error_is_reported_not_raised(self):
++        def boom(p):
++            raise ValueError("no battery_status")
++        fake = types.SimpleNamespace(__version__="0.1.0", check=boom)
++        with mock.patch.dict(sys.modules, {"compass": fake}):
++            c = checkup.run_compass("a.ulg")
++        self.assertEqual(c["level"], "not checked")
++        self.assertEqual(c["text"], "Compass not checked: ValueError: no battery_status.")
++
++    def test_check_carries_it_into_the_row(self):
++        with mock.patch.object(checkup, "run_health", return_value=dict(QUIET)), \
++                mock.patch.object(checkup, "run_gps", return_value={"skipped": "x"}), \
++                mock.patch.object(checkup, "read_delay_inputs", return_value=None), \
++                mock.patch.object(checkup, "run_compass", return_value=FLAG):
++            r = checkup.check("a.ulg", None)
++        self.assertEqual(r["compass"]["level"], "flag")
++        json.dumps(r)
++
++    def test_real_module_on_a_missing_file(self):
++        c = checkup.run_compass("/nonexistent/flight.ulg")
++        self.assertEqual(c["level"], "not checked")
++        self.assertTrue(c["text"].startswith("Compass not checked: "))
++
++
++if __name__ == "__main__":
++    unittest.main()
