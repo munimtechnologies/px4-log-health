@@ -43,7 +43,7 @@ def report(lag_row, inn_row, applied):
 
 class Version(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(checkup.__version__, "0.3.9")
+        self.assertEqual(checkup.__version__, "0.3.10")
 
 
 class DroneCAN(unittest.TestCase):

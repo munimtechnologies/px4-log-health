@@ -24,7 +24,7 @@ It prints one JSON line per log with each figure, the PX4 release, a list of pla
 
 `checkup.py` turns each log into a short Markdown report: the flags, a table of every figure with its place among 208 public flights, and a **GPS delay** verdict. The verdict measures how far the GPS lags the IMU with [px4-gps-lag](https://github.com/munimtechnologies/px4-gps-lag), compares that with the delay EKF2 assumed, and checks the direction against EKF2's own GPS velocity innovations. It suggests a new delay only when the measured lag is more than 50 ms off and the innovations don't point the other way. That is the rule px4-gps-lag's fleet studies support ([GRADE-innov-confirm.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/fleet-2026/GRADE-innov-confirm.md)). A suggested value is a starting point to check with EKF2 log replay, not a setting to fly.
 
-The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change. When a serial u-blox receiver runs `GPS_UBX_DYNMODEL` 6, the report adds one line about it (see 0.3.4 to 0.3.6 below). The report ends with a compass check: how much the compass follows the battery current (see 0.3.8 below), then a battery check: whether PX4's battery-resistance estimate collapsed to 0 in flight (see 0.3.9 below).
+The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change. When a serial u-blox receiver runs `GPS_UBX_DYNMODEL` 6, the report adds one line about it (see 0.3.4 to 0.3.6 below). The report ends with a compass check: how much the compass follows the battery current (see 0.3.8 below), then a battery check: whether PX4's battery-resistance estimate collapsed to 0 in flight (see 0.3.9 below; from 0.3.10 a collapse note says how to log a flight that can show why).
 
 ```
 pip install numpy pyulog requests
@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/px4-log-health@v0.3.9
+      - uses: munimtechnologies/px4-log-health@v0.3.10
         with:
           logs: "**/*.ulg"          # space-separated globs
           fail-on-flag: "false"     # "true" fails the step on any flag or suggestion
@@ -73,6 +73,36 @@ npx skills add munimtechnologies/px4-log-health --skill px4-log-health
 ```
 
 The skill only runs the checker locally; it sends no log anywhere.
+
+## What changed in 0.3.10: the battery note says how to find out why
+
+- **Why the wording changed.** A pre-registered replay of PX4's own resistance update on 211
+  public flights ([GRADE-replay.md](studies/battery-r-2026/GRADE-replay.md)) could not rebuild
+  most collapses to 0 from the logged voltage and current. It found that the estimate barely
+  updates in flight (in the median flight an update was accepted in about 1.5 % of the logged
+  0.2 s intervals), and that on 90 of 211 flights it had already settled at the first logged
+  sample. A log that starts at arming (`SDLOG_MODE` 0, PX4's default) therefore often cannot show
+  how the estimate reached 0.
+- **What the note now adds.** When the Battery section is a note, it ends with how to log one
+  flight that can show why: from boot (`SDLOG_MODE` 2), with the line `battery_status 0` in
+  `etc/logging/logger_topics.txt` on the SD card. Per the
+  [PX4 logging docs](https://docs.px4.io/main/en/dev_log/logging.html), that file's topics are
+  added on top of the default topics, and an interval of 0 logs the topic at full rate. If the log
+  already starts at boot (`SDLOG_MODE` 1 or 2), the note only suggests the full-rate line. When
+  the estimate was already 0 at takeoff on a log from arming, the note also says why such a log
+  may not show the cause. The JSON field `battery.sdlog_mode` now holds the log's `SDLOG_MODE`.
+- **Nothing else changed.** Levels, figures and every other section are the same as 0.3.9's.
+  The note is still a note, not a flag, and still suggests no resistance value.
+
+How it was checked: a sealed run built 0.3.10 from 0.3.9 on `main` with exact edits
+(`studies/v0310/job-diff.txt`), confirmed that `battery_r.py`'s measurement functions are still
+the same source as the census's, and passed every existing test plus the new
+`test_battery_r_011.py`. On the two PX4 PR #24831 logs, the three PX4 main logs and the three
+census logs that 0.3.9 was checked on, the report with the new hint sentences taken out equals
+0.3.9's (`studies/v039/`) apart from the version. A fourth census log (order 69, already 0 at
+takeoff with the estimate in use) got the note with the new wording and the census's figures
+(`studies/v0310/battery-census.json`). Finally it ran the agent skill's commands exactly as
+written, from the skill folder alone.
 
 ## What changed in 0.3.9: a battery check
 
@@ -264,7 +294,7 @@ Six of ten health predictions held. Our priors on vibration and jamming were too
 ```
 pip install numpy pyulog ijson requests
 python fetch_deps.py      # gps_lag.py, innov.py, fleet.py and test_gps_lag.py from px4-gps-lag
-python -m unittest -v test_checkup test_checkup_dynmodel test_health test_checkup_037 test_checkup_038 test_checkup_039 test_compass test_battery_r test_gps_lag
+python -m unittest -v test_checkup test_checkup_dynmodel test_health test_checkup_037 test_checkup_038 test_checkup_039 test_compass test_battery_r test_battery_r_011 test_gps_lag
 ```
 
 `smoke.py` re-measures three real logs from the study and checks them against the recorded figures. `smoke_checkup.py` does the same through `checkup.py` and the Action's script. Both download from Flight Review.

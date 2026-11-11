@@ -1,0 +1,285 @@
+{
+ "pin": "f0b39b3eff9819c0e9cbbed5d23e3d50a639696b",
+ "steps": {
+  "fetch_deps": {
+   "cmd": "/usr/local/bin/python fetch_deps.py",
+   "exit": 0
+  },
+  "tests": {
+   "cmd": "/usr/local/bin/python -m unittest -v test_checkup test_checkup_dynmodel test_health test_checkup_037 test_checkup_038 test_checkup_039 test_compass test_battery_r test_battery_r_011 test_gps_lag",
+   "exit": 0
+  },
+  "smoke_dyn": {
+   "cmd": "/usr/local/bin/python checkup.py /tmp/dyn/log_5_2025-5-27-11-50-34.ulg /tmp/dyn/log_8_2025-5-27-12-55-02.ulg --md /tmp/dyn-report.md --json /tmp/dyn-rows.jsonl",
+   "exit": 0
+  },
+  "smoke_main": {
+   "cmd": "/usr/local/bin/python checkup.py /data/px4main/5f1584c9-83ad-4d5e-97ac-46b3ed19f8e6.ulg /data/px4main/5548f136-8ecc-4b45-8c14-721bdf888a62.ulg /data/px4main/53a8335a-3705-4d98-acff-5d21cae8e6de.ulg --md /tmp/main-report.md --json /tmp/main-rows.jsonl",
+   "exit": 0
+  },
+  "census": {
+   "cmd": "/usr/local/bin/python checkup.py /data/battcensus/026bcfd6-de20-4069-b3cd-e15a4a21a66f.ulg /data/battcensus/03ce3cc6-db48-4134-b571-d98d4b03d3e4.ulg /data/battcensus/9f9268ce-1bc2-4a45-aa27-77f55cea35e7.ulg --md /tmp/census-report.md --json /tmp/census-rows.jsonl",
+   "exit": 0
+  },
+  "census_takeoff": {
+   "cmd": "/usr/local/bin/python checkup.py /data/battcensus/0d352749-1251-4136-821d-98f2df249102.ulg --md /tmp/takeoff-report.md --json /tmp/takeoff-rows.jsonl",
+   "exit": 0
+  },
+  "skill_step1_0": {
+   "cmd": "pip install numpy pyulog",
+   "exit": 0
+  },
+  "skill_step2": {
+   "cmd": "python .claude/skills/px4-log-health/scripts/checkup.py /tmp/dyn/log_5_2025-5-27-11-50-34.ulg /tmp/dyn/log_8_2025-5-27-12-55-02.ulg --md report.md --json rows.jsonl",
+   "exit": 0
+  }
+ },
+ "ok": true,
+ "base": "3dabfc79b83708533bb94d73cc0e7113e11cc6d9",
+ "tarball_sha256": "10249fb92255b2b41743c2157316fbf2887286edadbda28fa3cff4d1657b0c83",
+ "wait_tries": 1,
+ "edits": [
+  {
+   "n": 0,
+   "file": "checkup.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 1,
+   "file": "checkup.py",
+   "flags": [
+    "optional"
+   ],
+   "matches": 1
+  },
+  {
+   "n": 2,
+   "file": "test_checkup_dynmodel.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 3,
+   "file": "test_checkup_037.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 4,
+   "file": "test_checkup_038.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 5,
+   "file": "test_checkup_039.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 6,
+   "file": "battery_r.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 7,
+   "file": "battery_r.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 8,
+   "file": "battery_r.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 9,
+   "file": "battery_r.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 10,
+   "file": "battery_r.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 11,
+   "file": "battery_r.py",
+   "flags": [],
+   "matches": 1
+  },
+  {
+   "n": 12,
+   "file": "skills/px4-log-health/SKILL.md",
+   "flags": [
+    "all"
+   ],
+   "matches": 2
+  },
+  {
+   "n": 13,
+   "file": "skills/px4-log-health/SKILL.md",
+   "flags": [],
+   "matches": 1
+  }
+ ],
+ "readme": {
+  "section_inserted": true,
+  "action_tag": 1,
+  "checkup_intro": 1,
+  "tests_line": 1
+ },
+ "same_source_as_census": {
+  "airborne_mask": true,
+  "estimator_active": true,
+  "pick_battery": true,
+  "last_change_frac": true,
+  "step_fit": true,
+  "step_valid": true,
+  "cells_of": true,
+  "measure_data": true,
+  "TOPICS": true,
+  "FIELD": true,
+  "COV": true,
+  "MIN_SAMPLES": true,
+  "MIN_CURRENT_A": true,
+  "EARLY": true,
+  "MAX_GAP_S": true,
+  "DATA_MIN_PAIRS": true,
+  "DATA_MIN_RANGE_A": true,
+  "DATA_MAX_R": true
+ },
+ "tests": [
+  "Ran 166 tests in 0.867s",
+  "OK"
+ ],
+ "smoke_dyn": {
+  "checkup": [
+   "0.3.10"
+  ],
+  "battery_sections": 2,
+  "battery": [
+   {
+    "log": "log_5_2025-5-27-11-50-34.ulg",
+    "level": "not checked",
+    "collapsed": null,
+    "r_end_mohm": null,
+    "bat_r_internal": null,
+    "sdlog_mode": 2,
+    "battery_r": "0.1.1",
+    "text": "Battery resistance estimate not checked: no active estimator with valid current.",
+    "why_not": "no active estimator with valid current"
+   },
+   {
+    "log": "log_8_2025-5-27-12-55-02.ulg",
+    "level": "not checked",
+    "collapsed": null,
+    "r_end_mohm": null,
+    "bat_r_internal": null,
+    "sdlog_mode": 2,
+    "battery_r": "0.1.1",
+    "text": "Battery resistance estimate not checked: no active estimator with valid current.",
+    "why_not": "no active estimator with valid current"
+   }
+  ],
+  "gps_dynmodel": [
+   7,
+   6
+  ],
+  "same_as_039_without_hint": true,
+  "note_lines": 0,
+  "hint_lines": 0
+ },
+ "main_logs": {
+  "5f1584c9-83ad-4d5e-97ac-46b3ed19f8e6": {
+   "bytes": 11582978,
+   "sha256": "1be933d5f17d826f5838c79dbc992762427510695feebc1ec6b3212a24ffca7b",
+   "same_as_037": true
+  },
+  "5548f136-8ecc-4b45-8c14-721bdf888a62": {
+   "bytes": 75479314,
+   "sha256": "d6ef735fb67f49f5202d6dce5cf6a69242302685754c8300a20ac22a3f93dec5",
+   "same_as_037": true
+  },
+  "53a8335a-3705-4d98-acff-5d21cae8e6de": {
+   "bytes": 154051136,
+   "sha256": "14421d51fca926cc2a0dcea530e5d2bcd880c0d2462f404c05b33c326ee6d16c",
+   "same_as_037": true
+  }
+ },
+ "smoke_main": {
+  "battery_sections": 3,
+  "battery": [
+   {
+    "log": "5f1584c9-83ad-4d5e-97ac-46b3ed19f8e6.ulg",
+    "level": "not checked",
+    "collapsed": null,
+    "r_end_mohm": null,
+    "bat_r_internal": -1.0,
+    "sdlog_mode": 0,
+    "battery_r": "0.1.1",
+    "text": "Battery resistance estimate not checked: no battery_status data.",
+    "why_not": null
+   },
+   {
+    "log": "5548f136-8ecc-4b45-8c14-721bdf888a62.ulg",
+    "level": "not checked",
+    "collapsed": null,
+    "r_end_mohm": null,
+    "bat_r_internal": -1.0,
+    "sdlog_mode": 2,
+    "battery_r": "0.1.1",
+    "text": "Battery resistance estimate not checked: no active estimator with valid current.",
+    "why_not": "no active estimator with valid current"
+   },
+   {
+    "log": "53a8335a-3705-4d98-acff-5d21cae8e6de.ulg",
+    "level": "not checked",
+    "collapsed": null,
+    "r_end_mohm": null,
+    "bat_r_internal": -1.0,
+    "sdlog_mode": 0,
+    "battery_r": "0.1.1",
+    "text": "Battery resistance estimate not checked: no active estimator with valid current.",
+    "why_not": "no active estimator with valid current"
+   }
+  ],
+  "same_as_039_without_hint": true,
+  "note_lines": 0,
+  "hint_lines": 0
+ },
+ "census": {
+  "ok": true,
+  "a_same": true,
+  "same": [
+   true,
+   true,
+   true
+  ],
+  "levels": [
+   "ok",
+   "note",
+   "ok"
+  ],
+  "sdlog": [
+   0,
+   0,
+   0
+  ],
+  "takeoff_ok": true,
+  "takeoff_sdlog": 0,
+  "takeoff_text": "PX4's battery-resistance estimate was 0 for the whole second half of the flight (it was already 0 when the vehicle took off) while BAT1_R_INTERNAL is -1 (use the estimate), so PX4 did not correct the voltage-based state of charge for the voltage drop under load: it reads low under load and recovers after landing. On public PX4 flights this happened on 9 of 53 that use the estimate. A wrong current sensor scale or offset can also cause it. In flight the estimate barely updates, and on 90 of 211 public PX4 flights it had already settled at the first logged sample (studies/battery-r-2026/GRADE-replay.md), so a log that starts at arming may not show why. To see why, log one flight from boot (SDLOG_MODE 2) and add the line `battery_status 0` to etc/logging/logger_topics.txt on the SD card (PX4 then logs that topic at full rate, on top of its default topics). See PX4's battery estimation guide: https://docs.px4.io/main/en/config/battery"
+ },
+ "skill_step1": [
+  "pip install numpy pyulog"
+ ],
+ "skill_step2": [
+  "python scripts/checkup.py path/to/flight.ulg --md report.md --json rows.jsonl"
+ ],
+ "skill_report_same_as_repo": true
+}

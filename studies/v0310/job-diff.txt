@@ -1,0 +1,387 @@
+--- a/checkup.py
++++ b/checkup.py
+@@ -34,7 +34,9 @@
+ estimate collapsed to 0 in flight, which leaves the state of charge
+ uncorrected for load when BAT1_R_INTERNAL is -1. It comes from the
+ battery-r-2026 census (studies/battery-r-2026/GRADE.md). A collapse is a
+-note, not a flag, and no resistance value is suggested.
++note, not a flag, and no resistance value is suggested. From 0.3.10 the
++note also says how to log a flight that can show why the estimate
++collapsed (studies/battery-r-2026/GRADE-replay.md).
+ 
+     python checkup.py flight.ulg [more.ulg ...] [--md report.md] [--json rows.jsonl] [--fail-on-flag]
+ 
+@@ -58,7 +60,7 @@
+ 
+ import health
+ 
+-__version__ = "0.3.9"
++__version__ = "0.3.10"
+ 
+ OFF_MS = 50.0           # px4-gps-lag rule D1: suggest only when the lag is this far off the delay EKF2 assumed
+ NEAR_MS = 40.0          # within OFF_MS but this close to it: say so, with one decimal
+--- a/battery_r.py
++++ b/battery_r.py
+@@ -12,6 +12,11 @@
+ This check measures one ULog exactly as the census did (battr_logs.py 0.1.0, copied unchanged) and
+ says whether the estimate collapsed and whether PX4 was using it. It suggests no resistance value.
+ 
++0.1.1: a collapse note also says how to log a flight that can show why. The pre-registered replay
++(studies/battery-r-2026/GRADE-replay.md) found that the estimate barely updates in flight and was
++often already settled at the first sample of a log that starts at arming (SDLOG_MODE 0, the
++default), so such a log cannot show how it reached 0.
++
+     python battery_r.py flight.ulg [more.ulg ...] [--json]
+ 
+ Needs numpy and pyulog. By MV2 of Munim, Inc. (mv2@munimtech.com); written with AI agents.
+@@ -22,7 +27,7 @@
+ import json
+ import sys
+ 
+-__version__ = "0.1.0"
++__version__ = "0.1.1"
+ 
+ DOCS = "https://docs.px4.io/main/en/config/battery"
+ TOPICS = ("battery_status", "vehicle_land_detected", "vehicle_status")
+@@ -42,6 +47,10 @@
+ FLEET = {"source": "battery-r-2026: 75 measurable public PX4 flights (Flight Review, read 2026-11-10)",
+          "n": 75, "collapsed": 10, "used_estimate": 53, "collapsed_using_estimate": 9,
+          "alive_n": 65, "alive_p10": 1.1656, "alive_p50": 2.7357, "alive_p90": 7.4914}
++
++# battery-r-2026 replay (GRADE-replay.md, graded 2026-11-10): flights whose covariance norm was
++# already below 0.15 (3 times its floor) at the first logged sample
++REPLAY = {"source": "battery-r-2026 replay: 211 public PX4 flights", "n": 211, "settled_at_start": 90}
+ 
+ 
+ # ---------------------------------------------------------------- copied from battr_logs.py 0.1.0
+@@ -243,8 +252,30 @@
+     return None
+ 
+ 
+-def verdict(m, rint=None):
+-    """(level, text) for one measurement. level: 'note', 'ok' or 'not checked'."""
++def log_mode(params):
++    """SDLOG_MODE from the log's parameters (0: from arming, the default; 1, 2: from boot), or None."""
++    try:
++        return int((params or {})["SDLOG_MODE"])
++    except (KeyError, TypeError, ValueError):
++        return None
++
++
++def why_hint(first_zero_s, sdlog=None):
++    """How to log a flight that can show why the estimate collapsed (0.1.1, from GRADE-replay.md)."""
++    full = ("add the line `battery_status 0` to etc/logging/logger_topics.txt on the SD card (PX4 then logs "
++            "that topic at full rate, on top of its default topics)")
++    if sdlog in (1, 2):
++        return "To see why, %s; this log already starts at boot (SDLOG_MODE %d)." % (full, sdlog)
++    lead = ""
++    if not first_zero_s:
++        lead = ("In flight the estimate barely updates, and on %d of %d public PX4 flights it had already "
++                "settled at the first logged sample (studies/battery-r-2026/GRADE-replay.md), so a log that "
++                "starts at arming may not show why. " % (REPLAY["settled_at_start"], REPLAY["n"]))
++    return lead + "To see why, log one flight from boot (SDLOG_MODE 2) and " + full + "."
++
++
++def verdict(m, rint=None, sdlog=None):
++    """(level, text) for one measurement. level: 'note', 'ok' or 'not checked'. sdlog: SDLOG_MODE."""
+     if m.get("read") != "ok":
+         return "not checked", "Battery resistance estimate not checked: %s." % m.get("read")
+     if not m.get("measurable"):
+@@ -263,8 +294,9 @@
+                         "while %s, so PX4 did not correct the voltage-based state of charge for the voltage "
+                         "drop under load: it reads low under load and recovers after landing. On public PX4 "
+                         "flights this happened on %d of %d that use the estimate. A wrong current sensor scale "
+-                        "or offset can also cause it. See PX4's battery estimation guide: %s"
+-                        % (when, setting, FLEET["collapsed_using_estimate"], FLEET["used_estimate"], DOCS))
++                        "or offset can also cause it. %s See PX4's battery estimation guide: %s"
++                        % (when, setting, FLEET["collapsed_using_estimate"], FLEET["used_estimate"],
++                           why_hint(fz, sdlog), DOCS))
+     used = " BAT1_R_INTERNAL is set, so PX4 used that value instead." if (rint is not None and rint >= 0) else ""
+     return "ok", ("PX4's battery-resistance estimate did not collapse: it ended the flight at %.1f mOhm per cell "
+                   "(public PX4 flights: median %.1f, p10-p90 %.1f-%.1f).%s"
+@@ -286,8 +318,9 @@
+     data, params = read_log(path)
+     m = measure_data(data, params)
+     rint = r_internal(params)
+-    level, text = verdict(m, rint)
+-    return {"battery_r": __version__, "level": level, "text": text,
++    sdlog = log_mode(params)
++    level, text = verdict(m, rint, sdlog)
++    return {"battery_r": __version__, "level": level, "text": text, "sdlog_mode": sdlog,
+             "collapsed": m.get("collapsed") if m.get("measurable") else None,
+             "r_end_mohm": m.get("r_end_mohm") if m.get("measurable") else None,
+             "bat_r_internal": rint, "measure": m}
+--- a/test_checkup_dynmodel.py
++++ b/test_checkup_dynmodel.py
+@@ -37,7 +37,7 @@
+ 
+ class Info(unittest.TestCase):
+     def test_version(self):
+-        self.assertEqual(checkup.__version__, "0.3.9")
++        self.assertEqual(checkup.__version__, "0.3.10")
+ 
+     def test_device_id_layout(self):
+         self.assertEqual(F9P_SERIAL & 0x7, 5)
+--- a/test_checkup_037.py
++++ b/test_checkup_037.py
+@@ -43,7 +43,7 @@
+ 
+ class Version(unittest.TestCase):
+     def test_version(self):
+-        self.assertEqual(checkup.__version__, "0.3.9")
++        self.assertEqual(checkup.__version__, "0.3.10")
+ 
+ 
+ class DroneCAN(unittest.TestCase):
+--- a/test_checkup_038.py
++++ b/test_checkup_038.py
+@@ -27,7 +27,7 @@
+ 
+ class Version(unittest.TestCase):
+     def test_version(self):
+-        self.assertEqual(checkup.__version__, "0.3.9")
++        self.assertEqual(checkup.__version__, "0.3.10")
+ 
+ 
+ class Render(unittest.TestCase):
+--- a/test_checkup_039.py
++++ b/test_checkup_039.py
+@@ -32,7 +32,7 @@
+ 
+ class Version(unittest.TestCase):
+     def test_version(self):
+-        self.assertEqual(checkup.__version__, "0.3.9")
++        self.assertEqual(checkup.__version__, "0.3.10")
+ 
+ 
+ class Render(unittest.TestCase):
+--- a/README.md
++++ b/README.md
+@@ -24,7 +24,7 @@
+ 
+ `checkup.py` turns each log into a short Markdown report: the flags, a table of every figure with its place among 208 public flights, and a **GPS delay** verdict. The verdict measures how far the GPS lags the IMU with [px4-gps-lag](https://github.com/munimtechnologies/px4-gps-lag), compares that with the delay EKF2 assumed, and checks the direction against EKF2's own GPS velocity innovations. It suggests a new delay only when the measured lag is more than 50 ms off and the innovations don't point the other way. That is the rule px4-gps-lag's fleet studies support ([GRADE-innov-confirm.md](https://github.com/munimtechnologies/px4-gps-lag/blob/main/studies/fleet-2026/GRADE-innov-confirm.md)). A suggested value is a starting point to check with EKF2 log replay, not a setting to fly.
+ 
+-The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change. When a serial u-blox receiver runs `GPS_UBX_DYNMODEL` 6, the report adds one line about it (see 0.3.4 to 0.3.6 below). The report ends with a compass check: how much the compass follows the battery current (see 0.3.8 below), then a battery check: whether PX4's battery-resistance estimate collapsed to 0 in flight (see 0.3.9 below).
++The delay EKF2 assumed is `EKF2_GPS_DELAY` up to PX4 v1.17. From v1.18 on it is a delay per receiver, `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY` (see 0.3.2 below), and the report names the one to change. When a serial u-blox receiver runs `GPS_UBX_DYNMODEL` 6, the report adds one line about it (see 0.3.4 to 0.3.6 below). The report ends with a compass check: how much the compass follows the battery current (see 0.3.8 below), then a battery check: whether PX4's battery-resistance estimate collapsed to 0 in flight (see 0.3.9 below; from 0.3.10 a collapse note says how to log a flight that can show why).
+ 
+ ```
+ pip install numpy pyulog requests
+@@ -54,7 +54,7 @@
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+-      - uses: munimtechnologies/px4-log-health@v0.3.9
++      - uses: munimtechnologies/px4-log-health@v0.3.10
+         with:
+           logs: "**/*.ulg"          # space-separated globs
+           fail-on-flag: "false"     # "true" fails the step on any flag or suggestion
+@@ -73,6 +73,36 @@
+ ```
+ 
+ The skill only runs the checker locally; it sends no log anywhere.
++
++## What changed in 0.3.10: the battery note says how to find out why
++
++- **Why the wording changed.** A pre-registered replay of PX4's own resistance update on 211
++  public flights ([GRADE-replay.md](studies/battery-r-2026/GRADE-replay.md)) could not rebuild
++  most collapses to 0 from the logged voltage and current. It found that the estimate barely
++  updates in flight (in the median flight an update was accepted in about 1.5 % of the logged
++  0.2 s intervals), and that on 90 of 211 flights it had already settled at the first logged
++  sample. A log that starts at arming (`SDLOG_MODE` 0, PX4's default) therefore often cannot show
++  how the estimate reached 0.
++- **What the note now adds.** When the Battery section is a note, it ends with how to log one
++  flight that can show why: from boot (`SDLOG_MODE` 2), with the line `battery_status 0` in
++  `etc/logging/logger_topics.txt` on the SD card. Per the
++  [PX4 logging docs](https://docs.px4.io/main/en/dev_log/logging.html), that file's topics are
++  added on top of the default topics, and an interval of 0 logs the topic at full rate. If the log
++  already starts at boot (`SDLOG_MODE` 1 or 2), the note only suggests the full-rate line. When
++  the estimate was already 0 at takeoff on a log from arming, the note also says why such a log
++  may not show the cause. The JSON field `battery.sdlog_mode` now holds the log's `SDLOG_MODE`.
++- **Nothing else changed.** Levels, figures and every other section are the same as 0.3.9's.
++  The note is still a note, not a flag, and still suggests no resistance value.
++
++How it was checked: a sealed run built 0.3.10 from 0.3.9 on `main` with exact edits
++(`studies/v0310/job-diff.txt`), confirmed that `battery_r.py`'s measurement functions are still
++the same source as the census's, and passed every existing test plus the new
++`test_battery_r_011.py`. On the two PX4 PR #24831 logs, the three PX4 main logs and the three
++census logs that 0.3.9 was checked on, the report with the new hint sentences taken out equals
++0.3.9's (`studies/v039/`) apart from the version. A fourth census log (order 69, already 0 at
++takeoff with the estimate in use) got the note with the new wording and the census's figures
++(`studies/v0310/battery-census.json`). Finally it ran the agent skill's commands exactly as
++written, from the skill folder alone.
+ 
+ ## What changed in 0.3.9: a battery check
+ 
+@@ -264,7 +294,7 @@
+ ```
+ pip install numpy pyulog ijson requests
+ python fetch_deps.py      # gps_lag.py, innov.py, fleet.py and test_gps_lag.py from px4-gps-lag
+-python -m unittest -v test_checkup test_checkup_dynmodel test_health test_checkup_037 test_checkup_038 test_checkup_039 test_compass test_battery_r test_gps_lag
++python -m unittest -v test_checkup test_checkup_dynmodel test_health test_checkup_037 test_checkup_038 test_checkup_039 test_compass test_battery_r test_battery_r_011 test_gps_lag
+ ```
+ 
+ `smoke.py` re-measures three real logs from the study and checks them against the recorded figures. `smoke_checkup.py` does the same through `checkup.py` and the Action's script. Both download from Flight Review.
+--- a/skills/px4-log-health/SKILL.md
++++ b/skills/px4-log-health/SKILL.md
+@@ -53,7 +53,7 @@
+ 
+ The checker itself is already here, in this skill's `scripts/` folder (next to this SKILL.md):
+ `checkup.py`, `health.py`, `compass.py`, `battery_r.py` and `baseline.json` from px4-log-health
+-v0.3.9, and `gps_lag.py` and `innov.py` from px4-gps-lag 0.2.0. `scripts/SOURCES.json` lists where
++v0.3.10, and `gps_lag.py` and `innov.py` from px4-gps-lag 0.2.0. `scripts/SOURCES.json` lists where
+ each file came from and its sha256. Nothing else is downloaded. It needs Python 3 and two packages
+ from PyPI; use a virtual environment if the user prefers.
+ 
+@@ -157,7 +157,12 @@
+   estimate was already 0 at takeoff. Tell the user it can also come from a wrong current-sensor
+   scale or offset, and point them to PX4's battery estimation guide
+   (https://docs.px4.io/main/en/config/battery) and to the battery plots in Flight Review. Do not
+-  suggest a resistance value.
++  suggest a resistance value. If they want to find out why, the note says how to log a flight that
++  can show it: from boot (`SDLOG_MODE` 2), with the line `battery_status 0` in
++  `etc/logging/logger_topics.txt` on the SD card (that topic at full rate, on top of PX4's default
++  topics). A log that starts at arming (the default) often can't show why, because in flight the
++  estimate barely updates (`studies/battery-r-2026/GRADE-replay.md`). The JSON field
++  `battery.sdlog_mode` holds the log's `SDLOG_MODE`.
+ - `ok`: the estimate did not collapse (its final value is given against public flights: median
+   2.7 mOhm per cell), or it collapsed but `BAT1_R_INTERNAL` is set, so PX4 used the set value.
+ - `not checked`: no running estimator (smart or DroneCAN batteries, or PX4 older than v1.15), no
+@@ -169,7 +174,7 @@
+ 
+ ```yaml
+ - uses: actions/checkout@v4
+-- uses: munimtechnologies/px4-log-health@v0.3.9
++- uses: munimtechnologies/px4-log-health@v0.3.10
+   with:
+     logs: "**/*.ulg"          # space-separated globs
+     fail-on-flag: "false"     # "true" fails the step on any flag or suggestion
+--- /dev/null
++++ b/test_battery_r_011.py
+@@ -0,0 +1,127 @@
++"""Synthetic tests for battery_r.py 0.1.1: a collapse note says how to log a flight that can show
++why (studies/battery-r-2026/GRADE-replay.md). No flight log, no network.
++By MV2 of Munim, Inc.; written with AI agents. Apache-2.0."""
++
++import re
++import unittest
++from unittest import mock
++
++import numpy as np
++
++import battery_r as br
++
++DOCS = "https://docs.px4.io/main/en/config/battery"
++LEAD = ("In flight the estimate barely updates, and on 90 of 211 public PX4 flights it had already settled at "
++        "the first logged sample (studies/battery-r-2026/GRADE-replay.md), so a log that starts at arming may "
++        "not show why. ")
++FULL = ("add the line `battery_status 0` to etc/logging/logger_topics.txt on the SD card (PX4 then logs that "
++        "topic at full rate, on top of its default topics)")
++STRIP = re.compile(r"(can also cause it\. ).*?(See PX4's battery estimation guide: )")
++
++
++def measured(collapsed, r_end=0.0, first_zero_s=None):
++    return {"read": "ok", "measurable": True, "collapsed": collapsed, "r_end_mohm": r_end,
++            "first_zero_s": first_zero_s}
++
++
++def old_note(when, setting):
++    """battery_r 0.1.0's note text, as published in studies/v039."""
++    return ("PX4's battery-resistance estimate was 0 for the whole second half of the flight (%s) while %s, so "
++            "PX4 did not correct the voltage-based state of charge for the voltage drop under load: it reads low "
++            "under load and recovers after landing. On public PX4 flights this happened on 9 of 53 that use the "
++            "estimate. A wrong current sensor scale or offset can also cause it. See PX4's battery estimation "
++            "guide: %s" % (when, setting, DOCS))
++
++
++class Version(unittest.TestCase):
++    def test_version(self):
++        self.assertEqual(br.__version__, "0.1.1")
++        self.assertEqual((br.REPLAY["n"], br.REPLAY["settled_at_start"]), (211, 90))
++
++
++class LogMode(unittest.TestCase):
++    def test_log_mode(self):
++        self.assertEqual(br.log_mode({"SDLOG_MODE": 2}), 2)
++        self.assertEqual(br.log_mode({"SDLOG_MODE": 0}), 0)
++        self.assertEqual(br.log_mode({"SDLOG_MODE": 1.0}), 1)
++        self.assertIsNone(br.log_mode({}))
++        self.assertIsNone(br.log_mode(None))
++        self.assertIsNone(br.log_mode({"SDLOG_MODE": "x"}))
++
++
++class Hint(unittest.TestCase):
++    def test_at_takeoff_from_arming(self):
++        for sdlog in (0, None, 3, 4):
++            self.assertEqual(br.why_hint(0.0, sdlog),
++                             LEAD + "To see why, log one flight from boot (SDLOG_MODE 2) and " + FULL + ".")
++
++    def test_in_flight_from_arming(self):
++        self.assertEqual(br.why_hint(6.4, 0), "To see why, log one flight from boot (SDLOG_MODE 2) and " + FULL + ".")
++
++    def test_from_boot(self):
++        for fz in (0.0, 6.4):
++            self.assertEqual(br.why_hint(fz, 2),
++                             "To see why, " + FULL + "; this log already starts at boot (SDLOG_MODE 2).")
++        self.assertTrue(br.why_hint(0.0, 1).endswith("(SDLOG_MODE 1)."))
++
++    def test_plain_ascii_one_line(self):
++        for fz in (0.0, 6.4):
++            for sdlog in (0, 2, None):
++                h = br.why_hint(fz, sdlog)
++                self.assertNotIn("\n", h)
++                h.encode("ascii")
++
++
++class Verdict(unittest.TestCase):
++    def test_note_carries_the_hint_before_the_docs_link(self):
++        level, text = br.verdict(measured(True, 0.0, 0.0), -1.0, 0)
++        self.assertEqual(level, "note")
++        self.assertIn("can also cause it. " + LEAD + "To see why, log one flight from boot", text)
++        self.assertIn("on top of its default topics). See PX4's battery estimation guide: ", text)
++        self.assertTrue(text.endswith(DOCS))
++
++    def test_removing_the_hint_gives_the_010_text(self):
++        # build.py compares reports with studies/v039 this way
++        cases = ((measured(True, 0.0, 0.0), -1.0, 0, "it was already 0 when the vehicle took off",
++                  "BAT1_R_INTERNAL is -1 (use the estimate)"),
++                 (measured(True, 0.0, 6.4), -1.0, 2, "it first reached 0 6.4 s after takeoff",
++                  "BAT1_R_INTERNAL is -1 (use the estimate)"),
++                 (measured(True, 0.0, 0.0), None, None, "it was already 0 when the vehicle took off",
++                  "BAT1_R_INTERNAL is not in the log (PX4's default, -1, uses the estimate)"))
++        for m, rint, sdlog, when, setting in cases:
++            level, text = br.verdict(m, rint, sdlog)
++            self.assertEqual(STRIP.sub(r"\1\2", text), old_note(when, setting))
++
++    def test_default_sdlog_is_from_arming(self):
++        self.assertEqual(br.verdict(measured(True, 0.0, 0.0), -1.0), br.verdict(measured(True, 0.0, 0.0), -1.0, 0))
++
++    def test_no_hint_when_not_a_note(self):
++        for m, rint in ((measured(True, 0.0, 0.0), 0.005), (measured(False, 4.2), -1.0), (measured(False, 4.2), None)):
++            level, text = br.verdict(m, rint, 0)
++            self.assertEqual(level, "ok")
++            self.assertNotIn("To see why", text)
++            self.assertEqual(br.verdict(m, rint), (level, text))
++
++
++class Check(unittest.TestCase):
++    def test_check_reads_sdlog_mode(self):
++        n = 300
++        t = np.arange(n, dtype=np.int64) * 200000
++        cur = np.array([5.0 if i % 2 == 0 else 15.0 for i in range(n)])
++        b = {"timestamp": t, "internal_resistance_estimate": np.zeros(n), "current_a": cur,
++             "estimation_covariance_norm": np.linspace(1.0, 0.1, n), "cell_count": np.full(n, 4),
++             "voltage_v": 16.0 - 0.04 * cur}
++        data = {"battery_status": {0: b},
++                "vehicle_land_detected": {0: {"timestamp": np.array([0], dtype=np.int64), "landed": np.array([0])}}}
++        for params, sdlog, lead in (({"BAT1_R_INTERNAL": -1.0, "SDLOG_MODE": 1}, 1, False),
++                                    ({"BAT1_R_INTERNAL": -1.0, "SDLOG_MODE": 0}, 0, True),
++                                    ({"BAT1_R_INTERNAL": -1.0}, None, True)):
++            with mock.patch.object(br, "read_log", return_value=(data, params)):
++                r = br.check("a.ulg")
++            self.assertEqual((r["level"], r["sdlog_mode"], r["battery_r"]), ("note", sdlog, "0.1.1"))
++            self.assertEqual(LEAD in r["text"], lead)
++            self.assertIn("To see why", r["text"])
++
++
++if __name__ == "__main__":
++    unittest.main()

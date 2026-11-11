@@ -37,7 +37,7 @@ def lag(d=0.0, passed=True):
 
 class Info(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(checkup.__version__, "0.3.9")
+        self.assertEqual(checkup.__version__, "0.3.10")
 
     def test_device_id_layout(self):
         self.assertEqual(F9P_SERIAL & 0x7, 5)

@@ -32,7 +32,7 @@ def report(compass=None, battery=None):
 
 class Version(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(checkup.__version__, "0.3.9")
+        self.assertEqual(checkup.__version__, "0.3.10")
 
 
 class Render(unittest.TestCase):

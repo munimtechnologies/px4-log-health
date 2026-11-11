@@ -34,7 +34,9 @@ a Battery section follows (0.3.9): whether PX4's online battery-resistance
 estimate collapsed to 0 in flight, which leaves the state of charge
 uncorrected for load when BAT1_R_INTERNAL is -1. It comes from the
 battery-r-2026 census (studies/battery-r-2026/GRADE.md). A collapse is a
-note, not a flag, and no resistance value is suggested.
+note, not a flag, and no resistance value is suggested. From 0.3.10 the
+note also says how to log a flight that can show why the estimate
+collapsed (studies/battery-r-2026/GRADE-replay.md).
 
     python checkup.py flight.ulg [more.ulg ...] [--md report.md] [--json rows.jsonl] [--fail-on-flag]
 
@@ -58,7 +60,7 @@ import sys
 
 import health
 
-__version__ = "0.3.9"
+__version__ = "0.3.10"
 
 OFF_MS = 50.0           # px4-gps-lag rule D1: suggest only when the lag is this far off the delay EKF2 assumed
 NEAR_MS = 40.0          # within OFF_MS but this close to it: say so, with one decimal

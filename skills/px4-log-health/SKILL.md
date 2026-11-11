@@ -53,7 +53,7 @@ the checker in the tab with nothing uploaded: https://munimv2.github.io/px4-log-
 
 The checker itself is already here, in this skill's `scripts/` folder (next to this SKILL.md):
 `checkup.py`, `health.py`, `compass.py`, `battery_r.py` and `baseline.json` from px4-log-health
-v0.3.9, and `gps_lag.py` and `innov.py` from px4-gps-lag 0.2.0. `scripts/SOURCES.json` lists where
+v0.3.10, and `gps_lag.py` and `innov.py` from px4-gps-lag 0.2.0. `scripts/SOURCES.json` lists where
 each file came from and its sha256. Nothing else is downloaded. It needs Python 3 and two packages
 from PyPI; use a virtual environment if the user prefers.
 
@@ -157,7 +157,12 @@ flight:
   estimate was already 0 at takeoff. Tell the user it can also come from a wrong current-sensor
   scale or offset, and point them to PX4's battery estimation guide
   (https://docs.px4.io/main/en/config/battery) and to the battery plots in Flight Review. Do not
-  suggest a resistance value.
+  suggest a resistance value. If they want to find out why, the note says how to log a flight that
+  can show it: from boot (`SDLOG_MODE` 2), with the line `battery_status 0` in
+  `etc/logging/logger_topics.txt` on the SD card (that topic at full rate, on top of PX4's default
+  topics). A log that starts at arming (the default) often can't show why, because in flight the
+  estimate barely updates (`studies/battery-r-2026/GRADE-replay.md`). The JSON field
+  `battery.sdlog_mode` holds the log's `SDLOG_MODE`.
 - `ok`: the estimate did not collapse (its final value is given against public flights: median
   2.7 mOhm per cell), or it collapsed but `BAT1_R_INTERNAL` is set, so PX4 used the set value.
 - `not checked`: no running estimator (smart or DroneCAN batteries, or PX4 older than v1.15), no
@@ -169,7 +174,7 @@ Never tell the user a vehicle is safe or unsafe to fly on the strength of this r
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: munimtechnologies/px4-log-health@v0.3.9
+- uses: munimtechnologies/px4-log-health@v0.3.10
   with:
     logs: "**/*.ulg"          # space-separated globs
     fail-on-flag: "false"     # "true" fails the step on any flag or suggestion

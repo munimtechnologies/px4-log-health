@@ -12,6 +12,11 @@ landing).
 This check measures one ULog exactly as the census did (battr_logs.py 0.1.0, copied unchanged) and
 says whether the estimate collapsed and whether PX4 was using it. It suggests no resistance value.
 
+0.1.1: a collapse note also says how to log a flight that can show why. The pre-registered replay
+(studies/battery-r-2026/GRADE-replay.md) found that the estimate barely updates in flight and was
+often already settled at the first sample of a log that starts at arming (SDLOG_MODE 0, the
+default), so such a log cannot show how it reached 0.
+
     python battery_r.py flight.ulg [more.ulg ...] [--json]
 
 Needs numpy and pyulog. By MV2 of Munim, Inc. (mv2@munimtech.com); written with AI agents.
@@ -22,7 +27,7 @@ import argparse
 import json
 import sys
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 DOCS = "https://docs.px4.io/main/en/config/battery"
 TOPICS = ("battery_status", "vehicle_land_detected", "vehicle_status")
@@ -42,6 +47,10 @@ DATA_MAX_R = -0.3           # the step fit counts only if dV and dI are this ant
 FLEET = {"source": "battery-r-2026: 75 measurable public PX4 flights (Flight Review, read 2026-11-10)",
          "n": 75, "collapsed": 10, "used_estimate": 53, "collapsed_using_estimate": 9,
          "alive_n": 65, "alive_p10": 1.1656, "alive_p50": 2.7357, "alive_p90": 7.4914}
+
+# battery-r-2026 replay (GRADE-replay.md, graded 2026-11-10): flights whose covariance norm was
+# already below 0.15 (3 times its floor) at the first logged sample
+REPLAY = {"source": "battery-r-2026 replay: 211 public PX4 flights", "n": 211, "settled_at_start": 90}
 
 
 # ---------------------------------------------------------------- copied from battr_logs.py 0.1.0
@@ -243,8 +252,30 @@ def r_internal(params):
     return None
 
 
-def verdict(m, rint=None):
-    """(level, text) for one measurement. level: 'note', 'ok' or 'not checked'."""
+def log_mode(params):
+    """SDLOG_MODE from the log's parameters (0: from arming, the default; 1, 2: from boot), or None."""
+    try:
+        return int((params or {})["SDLOG_MODE"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def why_hint(first_zero_s, sdlog=None):
+    """How to log a flight that can show why the estimate collapsed (0.1.1, from GRADE-replay.md)."""
+    full = ("add the line `battery_status 0` to etc/logging/logger_topics.txt on the SD card (PX4 then logs "
+            "that topic at full rate, on top of its default topics)")
+    if sdlog in (1, 2):
+        return "To see why, %s; this log already starts at boot (SDLOG_MODE %d)." % (full, sdlog)
+    lead = ""
+    if not first_zero_s:
+        lead = ("In flight the estimate barely updates, and on %d of %d public PX4 flights it had already "
+                "settled at the first logged sample (studies/battery-r-2026/GRADE-replay.md), so a log that "
+                "starts at arming may not show why. " % (REPLAY["settled_at_start"], REPLAY["n"]))
+    return lead + "To see why, log one flight from boot (SDLOG_MODE 2) and " + full + "."
+
+
+def verdict(m, rint=None, sdlog=None):
+    """(level, text) for one measurement. level: 'note', 'ok' or 'not checked'. sdlog: SDLOG_MODE."""
     if m.get("read") != "ok":
         return "not checked", "Battery resistance estimate not checked: %s." % m.get("read")
     if not m.get("measurable"):
@@ -263,8 +294,9 @@ def verdict(m, rint=None):
                         "while %s, so PX4 did not correct the voltage-based state of charge for the voltage "
                         "drop under load: it reads low under load and recovers after landing. On public PX4 "
                         "flights this happened on %d of %d that use the estimate. A wrong current sensor scale "
-                        "or offset can also cause it. See PX4's battery estimation guide: %s"
-                        % (when, setting, FLEET["collapsed_using_estimate"], FLEET["used_estimate"], DOCS))
+                        "or offset can also cause it. %s See PX4's battery estimation guide: %s"
+                        % (when, setting, FLEET["collapsed_using_estimate"], FLEET["used_estimate"],
+                           why_hint(fz, sdlog), DOCS))
     used = " BAT1_R_INTERNAL is set, so PX4 used that value instead." if (rint is not None and rint >= 0) else ""
     return "ok", ("PX4's battery-resistance estimate did not collapse: it ended the flight at %.1f mOhm per cell "
                   "(public PX4 flights: median %.1f, p10-p90 %.1f-%.1f).%s"
@@ -286,8 +318,9 @@ def check(path):
     data, params = read_log(path)
     m = measure_data(data, params)
     rint = r_internal(params)
-    level, text = verdict(m, rint)
-    return {"battery_r": __version__, "level": level, "text": text,
+    sdlog = log_mode(params)
+    level, text = verdict(m, rint, sdlog)
+    return {"battery_r": __version__, "level": level, "text": text, "sdlog_mode": sdlog,
             "collapsed": m.get("collapsed") if m.get("measurable") else None,
             "r_end_mohm": m.get("r_end_mohm") if m.get("measurable") else None,
             "bat_r_internal": rint, "measure": m}
