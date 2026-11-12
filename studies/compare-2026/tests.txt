@@ -1,0 +1,32 @@
+test_large_change_away_from_setting_is_worse (test_compare.TestGpsLag.test_large_change_away_from_setting_is_worse) ... ok
+test_large_change_toward_setting_is_better (test_compare.TestGpsLag.test_large_change_toward_setting_is_better) ... ok
+test_noisy_lag_needs_two_se (test_compare.TestGpsLag.test_noisy_lag_needs_two_se) ... ok
+test_not_measured (test_compare.TestGpsLag.test_not_measured) ... ok
+test_small_change_is_same (test_compare.TestGpsLag.test_small_change_is_same) ... ok
+test_status_ok_to_off_is_worse (test_compare.TestGpsLag.test_status_ok_to_off_is_worse) ... ok
+test_innov_grows (test_compare.TestInnov.test_innov_grows) ... ok
+test_innov_not_passed (test_compare.TestInnov.test_innov_not_passed) ... ok
+test_innov_shrinks (test_compare.TestInnov.test_innov_shrinks) ... ok
+test_battery_collapse (test_compare.TestOtherItems.test_battery_collapse) ... ok
+test_clipping_appears (test_compare.TestOtherItems.test_clipping_appears) ... ok
+test_clipping_rate (test_compare.TestOtherItems.test_clipping_rate) ... ok
+test_compass (test_compare.TestOtherItems.test_compass) ... ok
+test_environment_never_counts (test_compare.TestOtherItems.test_environment_never_counts) ... ok
+test_health_not_read (test_compare.TestOtherItems.test_health_not_read) ... ok
+test_saturation (test_compare.TestOtherItems.test_saturation) ... ok
+test_warning_and_failsafe (test_compare.TestOtherItems.test_warning_and_failsafe) ... ok
+test_classes (test_compare.TestParams.test_classes) ... ok
+test_diff (test_compare.TestParams.test_diff) ... ok
+test_float32_tolerance (test_compare.TestParams.test_float32_tolerance) ... ok
+test_plain_row (test_compare.TestRender.test_plain_row) ... ok
+test_render (test_compare.TestRender.test_render) ... ok
+test_identical_rows_change_nothing (test_compare.TestSame.test_identical_rows_change_nothing) ... ok
+test_down_a_third_is_better (test_compare.TestVibration.test_down_a_third_is_better) ... ok
+test_old_units (test_compare.TestVibration.test_old_units) ... ok
+test_up_half_but_tiny_is_same (test_compare.TestVibration.test_up_half_but_tiny_is_same) ... ok
+test_up_half_is_worse (test_compare.TestVibration.test_up_half_is_worse) ... ok
+
+----------------------------------------------------------------------
+Ran 27 tests in 0.004s
+
+OK

@@ -1,0 +1,490 @@
+{
+ "pairs": "0.1.0",
+ "counts": {
+  "upgrade": 11,
+  "null": 40,
+  "config": 19,
+  "unmeasured": 34
+ },
+ "null_items": {
+  "gps_lag_ms": {
+   "comparable": 16,
+   "fired": 0,
+   "worse": 0,
+   "better": 0,
+   "share_fired": 0.0
+  },
+  "gps_delay_status": {
+   "comparable": 16,
+   "fired": 0,
+   "worse": 0,
+   "better": 0,
+   "share_fired": 0.0
+  },
+  "gps_innov_excess_ms": {
+   "comparable": 15,
+   "fired": 0,
+   "worse": 0,
+   "better": 0,
+   "share_fired": 0.0
+  },
+  "vibration_median": {
+   "comparable": 37,
+   "fired": 3,
+   "worse": 2,
+   "better": 1,
+   "share_fired": 0.0811
+  },
+  "clipping_per_min": {
+   "comparable": 37,
+   "fired": 2,
+   "worse": 2,
+   "better": 0,
+   "share_fired": 0.0541
+  },
+  "motor_saturation_share": {
+   "comparable": 28,
+   "fired": 0,
+   "worse": 0,
+   "better": 0,
+   "share_fired": 0.0
+  },
+  "compass_coupling": {
+   "comparable": 15,
+   "fired": 2,
+   "worse": 2,
+   "better": 0,
+   "share_fired": 0.1333
+  },
+  "battery_r_collapse": {
+   "comparable": 8,
+   "fired": 0,
+   "worse": 0,
+   "better": 0,
+   "share_fired": 0.0
+  },
+  "battery_warning": {
+   "comparable": 36,
+   "fired": 2,
+   "worse": 1,
+   "better": 1,
+   "share_fired": 0.0556
+  },
+  "failsafe_in_flight": {
+   "comparable": 40,
+   "fired": 3,
+   "worse": 1,
+   "better": 2,
+   "share_fired": 0.075
+  },
+  "satellites_median": {
+   "comparable": 35,
+   "fired": 3,
+   "worse": 1,
+   "better": 2,
+   "share_fired": 0.0857
+  },
+  "eph_median": {
+   "comparable": 32,
+   "fired": 2,
+   "worse": 1,
+   "better": 1,
+   "share_fired": 0.0625
+  }
+ },
+ "null_spread": {
+  "gps_lag_abs_ms": {
+   "n": 16,
+   "median": 0.0,
+   "p90": 9.95,
+   "p95": 13.35,
+   "max": 16.5
+  },
+  "innov_excess_abs_change_ms": {
+   "n": 15,
+   "median": 0.0,
+   "p90": 21.06,
+   "p95": 22.53,
+   "max": 24.0
+  },
+  "vibration_abs_log2_ratio": {
+   "n": 37,
+   "median": 0.0,
+   "p90": 0.3137,
+   "p95": 0.6999,
+   "max": 5.6816
+  },
+  "saturation_abs_points": {
+   "n": 28,
+   "median": 0.0,
+   "p90": 0.0017,
+   "p95": 0.0085,
+   "max": 0.0251
+  },
+  "compass_coupling_abs_pct": {
+   "n": 15,
+   "median": 0.0,
+   "p90": 8.2732,
+   "p95": 16.563,
+   "max": 24.088
+  }
+ },
+ "config_items": {
+  "gps_lag_ms": {
+   "comparable": 5,
+   "fired": 4,
+   "worse": 1,
+   "better": 3,
+   "share_fired": 0.8
+  },
+  "gps_delay_status": {
+   "comparable": 5,
+   "fired": 1,
+   "worse": 0,
+   "better": 1,
+   "share_fired": 0.2
+  },
+  "gps_innov_excess_ms": {
+   "comparable": 5,
+   "fired": 1,
+   "worse": 0,
+   "better": 1,
+   "share_fired": 0.2
+  },
+  "vibration_median": {
+   "comparable": 18,
+   "fired": 6,
+   "worse": 3,
+   "better": 3,
+   "share_fired": 0.3333
+  },
+  "clipping_per_min": {
+   "comparable": 18,
+   "fired": 3,
+   "worse": 0,
+   "better": 3,
+   "share_fired": 0.1667
+  },
+  "motor_saturation_share": {
+   "comparable": 15,
+   "fired": 3,
+   "worse": 2,
+   "better": 1,
+   "share_fired": 0.2
+  },
+  "compass_coupling": {
+   "comparable": 7,
+   "fired": 1,
+   "worse": 1,
+   "better": 0,
+   "share_fired": 0.1429
+  },
+  "battery_r_collapse": {
+   "comparable": 1,
+   "fired": 0,
+   "worse": 0,
+   "better": 0,
+   "share_fired": 0.0
+  },
+  "battery_warning": {
+   "comparable": 15,
+   "fired": 4,
+   "worse": 4,
+   "better": 0,
+   "share_fired": 0.2667
+  },
+  "failsafe_in_flight": {
+   "comparable": 19,
+   "fired": 7,
+   "worse": 5,
+   "better": 2,
+   "share_fired": 0.3684
+  },
+  "satellites_median": {
+   "comparable": 15,
+   "fired": 5,
+   "worse": 2,
+   "better": 3,
+   "share_fired": 0.3333
+  },
+  "eph_median": {
+   "comparable": 13,
+   "fired": 5,
+   "worse": 2,
+   "better": 3,
+   "share_fired": 0.3846
+  }
+ },
+ "config_spread": {
+  "gps_lag_abs_ms": {
+   "n": 5,
+   "median": 39.7,
+   "p90": 62.68,
+   "p95": 63.74,
+   "max": 64.8
+  },
+  "innov_excess_abs_change_ms": {
+   "n": 5,
+   "median": 16.4,
+   "p90": 41.64,
+   "p95": 48.32,
+   "max": 55.0
+  },
+  "vibration_abs_log2_ratio": {
+   "n": 18,
+   "median": 0.3445,
+   "p90": 1.0707,
+   "p95": 1.6513,
+   "max": 4.3291
+  },
+  "saturation_abs_points": {
+   "n": 15,
+   "median": 0.0072,
+   "p90": 0.5316,
+   "p95": 0.7079,
+   "max": 0.9038
+  },
+  "compass_coupling_abs_pct": {
+   "n": 7,
+   "median": 0.533,
+   "p90": 8.0148,
+   "p95": 13.0914,
+   "max": 18.168
+  }
+ },
+ "upgrade_items": {
+  "gps_lag_ms": {
+   "comparable": 11,
+   "fired": 7,
+   "worse": 2,
+   "better": 5,
+   "share_fired": 0.6364
+  },
+  "gps_delay_status": {
+   "comparable": 11,
+   "fired": 5,
+   "worse": 1,
+   "better": 4,
+   "share_fired": 0.4545
+  },
+  "gps_innov_excess_ms": {
+   "comparable": 11,
+   "fired": 8,
+   "worse": 1,
+   "better": 7,
+   "share_fired": 0.7273
+  },
+  "vibration_median": {
+   "comparable": 11,
+   "fired": 6,
+   "worse": 3,
+   "better": 3,
+   "share_fired": 0.5455
+  },
+  "clipping_per_min": {
+   "comparable": 11,
+   "fired": 5,
+   "worse": 2,
+   "better": 3,
+   "share_fired": 0.4545
+  },
+  "motor_saturation_share": {
+   "comparable": 10,
+   "fired": 2,
+   "worse": 1,
+   "better": 1,
+   "share_fired": 0.2
+  },
+  "compass_coupling": {
+   "comparable": 4,
+   "fired": 1,
+   "worse": 1,
+   "better": 0,
+   "share_fired": 0.25
+  },
+  "battery_r_collapse": {
+   "comparable": 4,
+   "fired": 2,
+   "worse": 2,
+   "better": 0,
+   "share_fired": 0.5
+  },
+  "battery_warning": {
+   "comparable": 6,
+   "fired": 3,
+   "worse": 2,
+   "better": 1,
+   "share_fired": 0.5
+  },
+  "failsafe_in_flight": {
+   "comparable": 11,
+   "fired": 1,
+   "worse": 0,
+   "better": 1,
+   "share_fired": 0.0909
+  },
+  "satellites_median": {
+   "comparable": 11,
+   "fired": 2,
+   "worse": 0,
+   "better": 2,
+   "share_fired": 0.1818
+  },
+  "eph_median": {
+   "comparable": 11,
+   "fired": 3,
+   "worse": 2,
+   "better": 1,
+   "share_fired": 0.2727
+  }
+ },
+ "upgrade_check": {
+  "pairs": [
+   {
+    "vehicle": "2d366e54b1d5",
+    "ours_ms": 26.8,
+    "published_ms": 26.8,
+    "within_5ms": true,
+    "gps_lag_status": "same"
+   },
+   {
+    "vehicle": "914cff99ec31",
+    "ours_ms": -54.8,
+    "published_ms": -54.8,
+    "within_5ms": true,
+    "gps_lag_status": "better"
+   },
+   {
+    "vehicle": "6cdebe79d7d8",
+    "ours_ms": -97.6,
+    "published_ms": -97.6,
+    "within_5ms": true,
+    "gps_lag_status": "better"
+   },
+   {
+    "vehicle": "3e0206eff5df",
+    "ours_ms": -109.1,
+    "published_ms": -109.1,
+    "within_5ms": true,
+    "gps_lag_status": "worse"
+   },
+   {
+    "vehicle": "0865d922e4e9",
+    "ours_ms": -19.3,
+    "published_ms": -19.3,
+    "within_5ms": true,
+    "gps_lag_status": "same"
+   },
+   {
+    "vehicle": "182746427322",
+    "ours_ms": -7.2,
+    "published_ms": -7.2,
+    "within_5ms": true,
+    "gps_lag_status": "same"
+   },
+   {
+    "vehicle": "72094dd79c2e",
+    "ours_ms": -137.9,
+    "published_ms": -137.9,
+    "within_5ms": true,
+    "gps_lag_status": "better"
+   },
+   {
+    "vehicle": "49a2804b6f62",
+    "ours_ms": -194.9,
+    "published_ms": -194.9,
+    "within_5ms": true,
+    "gps_lag_status": "worse"
+   },
+   {
+    "vehicle": "81df89e1cc22",
+    "ours_ms": -74.4,
+    "published_ms": -74.4,
+    "within_5ms": true,
+    "gps_lag_status": "better"
+   },
+   {
+    "vehicle": "07f813c57117",
+    "ours_ms": -94.9,
+    "published_ms": -94.9,
+    "within_5ms": true,
+    "gps_lag_status": "better"
+   },
+   {
+    "vehicle": "4356b0c5e400",
+    "ours_ms": 2.1,
+    "published_ms": 2.1,
+    "within_5ms": true,
+    "gps_lag_status": "same"
+   }
+  ],
+  "both_measured": 11,
+  "within_5ms": 11,
+  "result": "held"
+ },
+ "null_verdicts": {
+  "no change beyond the rules": 34,
+  "worse on 2 items": 1,
+  "worse on 1 item": 2,
+  "worse on 4 items": 1,
+  "changed, nothing worse": 2
+ },
+ "config_settings_changed_median": 3.0,
+ "grade": {
+  "G1_gate": {
+   "result": "passed",
+   "n_null": 40,
+   "need": 30
+  },
+  "P1_gps_lag": {
+   "result": "held",
+   "n": 16,
+   "share": 0.0,
+   "limit": 0.1,
+   "low": null,
+   "median_abs_ms": 0.0
+  },
+  "P2_vibration": {
+   "result": "held",
+   "n": 37,
+   "share": 0.0811,
+   "limit": 0.15,
+   "low": null
+  },
+  "P3_saturation": {
+   "result": "held",
+   "n": 28,
+   "share": 0.0,
+   "limit": 0.1,
+   "low": null
+  },
+  "P4_compass": {
+   "result": "held",
+   "n": 15,
+   "share": 0.1333,
+   "limit": 0.25,
+   "low": null
+  },
+  "P5_battery": {
+   "result": "too few",
+   "n": 8,
+   "need": 10,
+   "share": 0.0
+  },
+  "P6_any_worse": {
+   "result": "held",
+   "n": 40,
+   "share": 0.1,
+   "limit": 0.3,
+   "low": null,
+   "pairs_with_a_worse_item": 4
+  },
+  "P7_settings_changed": {
+   "result": "held",
+   "n": 59,
+   "share": 0.322,
+   "limit": 0.6,
+   "low": 0.2
+  }
+ }
+}

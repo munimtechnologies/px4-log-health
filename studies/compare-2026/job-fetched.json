@@ -1,0 +1,31 @@
+{
+ "pairs": "0.1.0",
+ "ok": true,
+ "started": "2026-11-12T15:56:11Z",
+ "tests_exit": 0,
+ "plan_commit": "6ded89861d4d1ca6b820598a60159dc8353e4024",
+ "published_sha256": {
+  "studies/compare-2026/PLAN.md": "3d9970e0067bc991b1584494dabc4450c340486a04d2b141eb98ea1dd2b6e3be",
+  "studies/compare-2026/pairs.py": "ba57da236eb8832ab3b9d9aa0086ac1be1e949995b31ab90d91dec65f2b76eba",
+  "compare.py": "972f57cc3d5bd0e2896a0f8047f0977c89da7cf46d2c54bc32f80c46014c74fd",
+  "test_compare.py": "98766d8a76af0998947bf9103239a2dae483fd435a0b84ce02057346fd6b0464"
+ },
+ "checkup_tarball_sha256": "274f1b2d34741f10909b4d3ba6e41e54bac4a5321c076175b269e43630b1732e",
+ "fetch_deps_exit": 0,
+ "fetched": {
+  "px4-gps-lag": "f0b39b3eff9819c0e9cbbed5d23e3d50a639696b",
+  "gps_lag.py": "0070f3cbc1fa95f862e89e0f350947a5425f56843dcc9fc810a2c8ae41b9a90c",
+  "innov.py": "64625526298a14f3fb4a11d24a545788971625229f1b36b5fd3e289d73e657d6",
+  "fleet.py": "a953a27ce219aae2d46ca00cffaca5f4863da278f971195989a1dd3713f3171b",
+  "test_gps_lag.py": "e9f7e1ccc19d76d0f221fb244565bbcb86a8fe6e6f2761fb87121895ded75b79"
+ },
+ "compare": "0.1.0",
+ "upgrade_pairs_listed": 11,
+ "dbinfo": {
+  "entries": 489563,
+  "eligible": 62352
+ },
+ "candidate_vehicles": 6104,
+ "stop": "target reached",
+ "downloads": 188
+}
