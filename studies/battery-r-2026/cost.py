@@ -15,6 +15,12 @@ Two modes:
 
 The study mode needs battr_logs.py 0.1.0 (px4-log-health) and gnss_logs.py 0.1.0 (px4-gps-lag)
 next to it. No position is read or written.
+
+0.1.1 (2026-11-12, before any log was read): non-finite values are kept out of the arithmetic.
+R_used is the median of the finite logged estimates over the active samples (a NaN estimate is
+not a logged value of R), and a k or k_exp that is not finite counts as not known, so it can
+never enter the sets C and A or the rank correlation. The plan's rules are unchanged.
+
 By MV2 of Munim, Inc. (mv2@munimtech.com); written with AI agents. Apache-2.0.
 """
 
@@ -27,7 +33,7 @@ import sys
 import tempfile
 import time
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 PLAN_URL = "https://raw.githubusercontent.com/munimtechnologies/px4-log-health/main/studies/battery-r-2026/PLAN-cost.md"
 
@@ -42,6 +48,14 @@ P3_RHO, P3_MIN = 0.3, 26
 CENSUS_KEYS = ("measurable", "why_not", "collapsed", "first_zero_s", "r_end_mohm", "r_start_mohm",
                "cells", "step", "step_valid", "battery_instance", "samples", "airborne_s",
                "current_median_a")
+
+
+def finite(x):
+    """True for a real, finite number (not None, not NaN, not inf)."""
+    try:
+        return x is not None and math.isfinite(float(x))
+    except (TypeError, ValueError):
+        return False
 
 
 # ---------------------------------------------------------------- parameters
@@ -73,14 +87,15 @@ def r_used_of(params, inst, estimate_ohm):
     r = param(params, "R_INTERNAL", inst)
     if r is not None and r >= 0:
         return r
-    return estimate_ohm
+    return estimate_ohm if finite(estimate_ohm) else None
 
 
 def k_expected(step_mohm, r_used_ohm, span):
-    """-(R_step - R_used) / span, per ampere (fraction of full scale)."""
-    if step_mohm is None or r_used_ohm is None or not span:
+    """-(R_step - R_used) / span, per ampere (fraction of full scale); None if not finite."""
+    if not finite(step_mohm) or not finite(r_used_ohm) or not finite(span) or not span:
         return None
-    return -(step_mohm / 1000.0 - r_used_ohm) / span
+    v = -(step_mohm / 1000.0 - r_used_ohm) / span
+    return v if math.isfinite(v) else None
 
 
 # ---------------------------------------------------------------- one flight
@@ -110,6 +125,14 @@ def fit_k(t_us, remaining, current):
     coef, _, _, _ = np.linalg.lstsq(x, y, rcond=None)
     res = y - x.dot(coef)
     return float(coef[3]), float(np.std(res))
+
+
+def median_finite(values, mask):
+    """Median of the finite values under mask, or None if there are none."""
+    import numpy as np
+    v = np.asarray(values, dtype=np.float64)
+    m = np.asarray(mask, dtype=bool) & np.isfinite(v)
+    return float(np.median(v[m])) if np.any(m) else None
 
 
 def measure_cost(data, params=None):
@@ -150,9 +173,10 @@ def measure_cost(data, params=None):
     out["active"] = n_act
     out["active_share"] = round(n_act / float(n_good), 4) if n_good else None
     out["capacity_mah"] = capacity
+    out["estimate_nonfinite_active"] = int(np.sum(act & ~np.isfinite(est)))
     span = span_of(params, inst)
     out["span_v"] = round(span, 4) if span else None
-    r_est = float(np.median(est[act])) if n_act else None
+    r_est = median_finite(est, act)
     r_used = r_used_of(params, inst, r_est)
     out["r_used_mohm"] = round(r_used * 1000.0, 4) if r_used is not None else None
     step = census.get("step") or {}
@@ -171,6 +195,10 @@ def measure_cost(data, params=None):
         out["why_not"] = "active current range under %.0f A" % MIN_RANGE_A
         return out
     k, sd = fit_k(t[act], rem[act], ca)
+    if not math.isfinite(k):
+        out["measured"] = False
+        out["why_not"] = "fit not finite"
+        return out
     out["measured"] = True
     out["k"] = k
     out["residual_sd"] = round(sd, 6)
@@ -232,11 +260,11 @@ def spearman(a, b):
 
 def grade(measures):
     """(predictions, report) with the plan's rules, from per-flight measure dicts."""
-    ms = [m for m in measures if m.get("measured")]
+    ms = [m for m in measures if m.get("measured") and finite(m.get("k"))]
     col = [m for m in ms if (m.get("census") or {}).get("collapsed")]
     alive = [m for m in ms if not (m.get("census") or {}).get("collapsed")]
-    c_set = [m for m in col if m.get("k_exp") is not None and m["k_exp"] < 0]
-    a_set = [m for m in alive if m.get("k_exp") is not None]
+    c_set = [m for m in col if finite(m.get("k_exp")) and m["k_exp"] < 0]
+    a_set = [m for m in alive if finite(m.get("k_exp"))]
     ratios = [m["k"] / m["k_exp"] for m in c_set]
     med_ratio = _median(ratios)
     med_kc = _median([m["k"] for m in c_set])
@@ -272,6 +300,8 @@ def grade(measures):
         "active_share": _quantiles([m.get("active_share") for m in ms]),
         "active_share_unmeasured": _quantiles([m.get("active_share") for m in measures
                                                if not m.get("measured")]),
+        "k_exp_not_known": {"collapsed": sum(1 for m in col if not finite(m.get("k_exp"))),
+                            "alive": sum(1 for m in alive if not finite(m.get("k_exp")))},
         "C_rows": [{"k_pp_per_10A": round(m["k"] * 1000.0, 3),
                     "k_exp_pp_per_10A": round(m["k_exp"] * 1000.0, 3),
                     "step_mohm": ((m.get("census") or {}).get("step") or {}).get("mohm_per_cell"),
@@ -330,10 +360,10 @@ def analytic(replay_rows, params):
             skip("no V_CHARGED > V_EMPTY")
             continue
         r_end = c.get("r_end_mohm")
-        r_used = r_used_of(p, inst, None if r_end is None else r_end / 1000.0)
+        r_used = r_used_of(p, inst, None if not finite(r_end) else r_end / 1000.0)
         step = (c.get("step") or {}).get("mohm_per_cell")
         i = c.get("current_median_a")
-        if r_used is None or step is None or i is None:
+        if r_used is None or not finite(step) or not finite(i):
             skip("missing value")
             continue
         rows.append({"collapsed": bool(c.get("collapsed")), "step_mohm": step,

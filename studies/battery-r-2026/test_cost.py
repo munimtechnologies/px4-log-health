@@ -16,6 +16,7 @@ R_CELL = 0.004
 SPAN = 4.05 - 3.6
 PARAMS = {"BAT1_V_EMPTY": 3.6, "BAT1_V_CHARGED": 4.05, "BAT1_CAPACITY": 5000.0,
           "BAT1_R_INTERNAL": -1.0, "BAT1_N_CELLS": 4}
+NAN = float("nan")
 
 
 def flight(collapsed=True, n=600):
@@ -59,6 +60,31 @@ class ParamTests(unittest.TestCase):
         self.assertIsNone(cost.k_expected(3.0, 0.0, None))
 
 
+class NonFiniteTests(unittest.TestCase):
+    """0.1.1: a NaN or infinite value is never used as a number."""
+
+    def test_finite(self):
+        self.assertTrue(cost.finite(0.0))
+        self.assertTrue(cost.finite(-3))
+        self.assertFalse(cost.finite(None))
+        self.assertFalse(cost.finite(NAN))
+        self.assertFalse(cost.finite(float("inf")))
+        self.assertFalse(cost.finite("x"))
+
+    def test_nan_estimate_is_not_known(self):
+        self.assertIsNone(cost.r_used_of({"BAT1_R_INTERNAL": -1}, 0, NAN))
+        self.assertEqual(cost.r_used_of({"BAT1_R_INTERNAL": 0.003}, 0, NAN), 0.003)
+        self.assertIsNone(cost.k_expected(3.0, NAN, 0.45))
+        self.assertIsNone(cost.k_expected(NAN, 0.0, 0.45))
+
+    def test_median_finite(self):
+        v = np.array([NAN, 1.0, 2.0, 3.0, NAN])
+        m = np.array([True, True, True, False, True])
+        self.assertEqual(cost.median_finite(v, m), 1.5)
+        self.assertIsNone(cost.median_finite(np.array([NAN, NAN]), np.array([True, True])))
+        self.assertIsNone(cost.median_finite(np.array([1.0, 2.0]), np.array([False, False])))
+
+
 class MaskAndFitTests(unittest.TestCase):
     def test_active_mask(self):
         good = np.array([True, True, True, False])
@@ -86,6 +112,7 @@ class MeasureTests(unittest.TestCase):
         self.assertAlmostEqual(m["census"]["step"]["mohm_per_cell"], 4.0, places=1)
         self.assertTrue(m["measured"], m.get("why_not"))
         self.assertEqual(m["active"], 600)
+        self.assertEqual(m["estimate_nonfinite_active"], 0)
         self.assertEqual(m["r_used_mohm"], 0.0)
         self.assertAlmostEqual(m["k"], -R_CELL / SPAN, places=6)
         self.assertAlmostEqual(m["k_exp"], -R_CELL / SPAN, places=4)
@@ -164,6 +191,18 @@ class GradeTests(unittest.TestCase):
         self.assertEqual(rep["C"], 6)
         self.assertEqual(rep["collapsed_measured"], 7)
 
+    def test_nonfinite_values_kept_out(self):
+        # a NaN k_exp is "not known" (kept out of C and A); a NaN k is not a measurement
+        ms = self.sets() + [meas(False, -0.001, NAN), meas(True, -0.02, NAN),
+                            meas(False, NAN, -0.001)]
+        p, rep = cost.grade(ms)
+        self.assertEqual(p, {"P1": True, "P2": True, "P3": True})
+        self.assertEqual(rep["C"], 6)
+        self.assertEqual(rep["A"], 20)
+        self.assertEqual(rep["measured"], 28)
+        self.assertEqual(rep["k_exp_not_known"], {"collapsed": 1, "alive": 1})
+        self.assertAlmostEqual(rep["p3_rho"], 1.0, places=4)
+
 
 class AnalyticTests(unittest.TestCase):
     def test_analytic(self):
@@ -187,6 +226,15 @@ class AnalyticTests(unittest.TestCase):
         self.assertEqual(res["uncompensated_pp_alive"]["n"], 2)
         self.assertEqual(sorted([res["uncompensated_pp_alive"]["p10"], res["uncompensated_pp_alive"]["max"]]),
                          [0.0, 2.222])
+
+    def test_analytic_nan_end_estimate_is_missing(self):
+        rows = [{"log_id": "a", "measure": {"replayed": True, "census": {
+            "step_valid": True, "step": {"mohm_per_cell": 3.0}, "collapsed": False,
+            "r_end_mohm": NAN, "current_median_a": 10.0, "battery_instance": 0}}}]
+        params = {"a": {"BAT1_V_EMPTY": 3.6, "BAT1_V_CHARGED": 4.05, "BAT1_R_INTERNAL": -1}}
+        res = cost.analytic(rows, params)
+        self.assertEqual(res["flights"], 0)
+        self.assertEqual(res["skipped"], {"missing value": 1})
 
 
 class PassTests(unittest.TestCase):
