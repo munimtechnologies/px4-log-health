@@ -32,6 +32,7 @@ def main(out_dir):
             rec["exit"] = tc.main([name, "--json", js])
             with open(js, encoding="utf-8") as f:
                 rep = json.load(f)
+            rec["trace"] = rep.get("trace")
             rec["stop"] = rep.get("stop")
             rec["samples"] = rep.get("samples")
             rec["n_cells"] = rep.get("n_cells")

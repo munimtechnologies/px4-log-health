@@ -23,6 +23,8 @@ KEYWORDS = ("_voltage_prediction", "_prediction_error", "voltage_prediction", "p
             "_last_unconnected_timestamp", "LITHIUM_BATTERY_RECOGNITION_VOLTAGE")
 FUNCTIONS = ("void Battery::updateInternalResistanceEstimation", "void Battery::resetInternalResistanceEstimation",
              "void Battery::updateBatteryStatus", "float Battery::calculateStateOfChargeVoltageBased")
+LOCAL = ("PLAN-trace.md", "NOTE-trace-align.md", "NOTE-trace-impl.md", "battr_trace.py", "test_battr_trace.py",
+         "job_fetch_trace.py", "smoke_trace.py")
 
 
 def get(url):
@@ -57,7 +59,7 @@ with open("replay.py", "wb") as f:
     f.write(rep)
 fetched["px4-log-health/main/studies/battery-r-2026/replay.py"] = {"sha256": sha(rep), "bytes": len(rep),
                                                                     "git_blob": REPLAY_BLOB}
-for local in ("PLAN-trace.md", "battr_trace.py", "test_battr_trace.py", "job_fetch_trace.py", "smoke_trace.py"):
+for local in LOCAL:
     try:
         data = open(local, "rb").read()
         fetched["local/" + local] = {"sha256": sha(data), "bytes": len(data), "git_blob": git_blob(data)}

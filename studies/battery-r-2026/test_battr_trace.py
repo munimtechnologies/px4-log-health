@@ -1,9 +1,11 @@
-"""Synthetic tests for battr_trace.py 0.1.0 (battery-r-2026, trace). No flight log; no network.
+"""Synthetic tests for battr_trace.py 0.1.1 (battery-r-2026, trace, with NOTE-trace-align.md's timing
+readouts). No flight log; no network.
 'firmware()' below plays PX4 logging battery_status at full rate from the first sample: replay.py's
 call pattern (reset during the first 2 s, update when current > FLT_EPSILON) plus the logged
 voltage_prediction, which keeps its last value when there is no update.
 By MV2 of Munim, Inc.; written with AI agents. Apache-2.0."""
 
+import json
 import math
 import unittest
 
@@ -53,6 +55,19 @@ def firmware(t, volt, cur, n_cells=4):
 def bat_of(t, volt, cur, fw):
     return {"timestamp": t, "voltage_v": volt, "current_a": cur, "internal_resistance_estimate": fw["r"],
             "estimation_covariance_norm": fw["norm"], "voltage_prediction": fw["pred"]}
+
+
+def one_step(cur_at, volt_at, n=100, down=False):
+    """10 ms samples; the current steps 1 -> 6 A into sample cur_at and the voltage 16.0 -> 15.9 V
+    into sample volt_at (None: the voltage never moves). down=True mirrors both steps."""
+    k = np.arange(n)
+    t = k.astype(np.int64) * 10000
+    cur = np.where(k >= cur_at, 6.0, 1.0)
+    volt = np.where(k >= volt_at, 15.9, 16.0) if volt_at is not None else np.full(n, 16.0)
+    if down:
+        cur = 7.0 - cur
+        volt = 31.9 - volt
+    return t, volt, cur
 
 
 class Firmware(unittest.TestCase):
@@ -187,7 +202,7 @@ class Recover(unittest.TestCase):
 
 
 class Attribution(unittest.TestCase):
-    def case(self, d7, d8, v8):
+    def case(self, d7, d8, v8, n_cells=None):
         t = np.arange(10, dtype=np.int64) * 10000
         cur = np.array([1.0] * 8 + [2.0, 2.0])
         volt = np.array([16.0] * 8 + [v8, v8])
@@ -198,7 +213,7 @@ class Attribution(unittest.TestCase):
               "accepted": np.array([True] * 10)}
         onset = int(np.flatnonzero(tr["r_raw"] < 0)[0])
         self.assertEqual(onset, 8)
-        return tc.attribute(t, volt, cur, tr, 0, onset)
+        return tc.attribute(t, volt, cur, tr, 0, onset, n_cells)
 
     def test_mechanism_b(self):
         # k = 7 quiet (-0.6 mOhm); k = 8 a 1 A step with voltage up (-0.7 mOhm): quiet 0.6 / 1.3
@@ -208,6 +223,7 @@ class Attribution(unittest.TestCase):
         self.assertAlmostEqual(a["quiet_share"], 0.4615, places=4)
         self.assertEqual(a["wrong_way_share_of_steps"], 1.0)
         self.assertEqual(a["mechanism"], "B")
+        self.assertIsNone(a["flat_share"])
 
     def test_mechanism_c(self):
         a = self.case(-0.0006, -0.0007, 15.99)
@@ -219,6 +235,132 @@ class Attribution(unittest.TestCase):
         a = self.case(-0.0010, -0.0003, 16.01)
         self.assertAlmostEqual(a["quiet_share"], 0.7692, places=4)
         self.assertEqual(a["mechanism"], "A")
+
+
+class Flat(unittest.TestCase):
+    """NOTE-trace-align.md: flat if |dV| < 0.25 * n_cells * max(R_before, 1 mOhm) * |dI|."""
+
+    case = Attribution.case
+
+    def test_flat_step_is_mechanism_c_but_counts_for_t4(self):
+        # k = 8: 1 A step, voltage unchanged. R_before = 0.5 mOhm -> 1 mOhm floor; threshold
+        # 0.25 * 4 * 0.001 * 1 = 1 mV; |dV| = 0 -> flat, not wrong-way. Share 0.7 / 1.3 = 0.5385
+        a = self.case(-0.0006, -0.0007, 16.0, 4)
+        self.assertEqual(a["mechanism"], "C")
+        row = [r for r in a["rows"] if r["k"] == 8][0]
+        self.assertTrue(row["flat"])
+        self.assertFalse(row["wrong_way"])
+        self.assertAlmostEqual(row["r_before_mohm"], 0.5, places=9)
+        self.assertAlmostEqual(a["flat_share"], 0.5385, places=4)
+        self.assertAlmostEqual(a["flat_or_wrong_share"], 0.5385, places=4)
+        self.assertEqual(a["wrong_way_share"], 0.0)
+        self.assertFalse([r for r in a["rows"] if r["k"] == 7][0]["flat"])   # quiet is never flat
+
+    def test_wrong_way_is_not_flat(self):
+        # |dV| = 10 mV >= 1 mV: not flat, but wrong-way; the union is still 0.5385
+        a = self.case(-0.0006, -0.0007, 16.01, 4)
+        self.assertEqual(a["flat_share"], 0.0)
+        self.assertAlmostEqual(a["flat_or_wrong_share"], 0.5385, places=4)
+        self.assertAlmostEqual(a["wrong_way_share"], 0.5385, places=4)
+
+    def test_threshold_uses_r_before(self):
+        # dV = -4 mV for a 1 A step. With R_before 5.1 mOhm the threshold is 0.25 * 4 * 0.0051 =
+        # 5.1 mV -> flat; with R_before 0.5 mOhm (floor 1 mOhm) it is 1 mV -> not flat
+        a = self.case(0.004, -0.006, 15.996, 4)
+        self.assertEqual(a["descent_start"], 7)
+        self.assertEqual(a["updates"], 1)
+        self.assertAlmostEqual(a["rows"][0]["r_before_mohm"], 5.1, places=9)
+        self.assertTrue(a["rows"][0]["flat"])
+        self.assertEqual(a["flat_share"], 1.0)
+        b = self.case(-0.0006, -0.0007, 15.996, 4)
+        self.assertEqual(b["flat_share"], 0.0)
+        self.assertEqual(b["flat_or_wrong_share"], 0.0)
+
+    def test_is_flat(self):
+        self.assertTrue(tc.is_flat(0.0009, 1.0, 0.0, 4))
+        self.assertFalse(tc.is_flat(0.001, 1.0, 0.0, 4))
+        self.assertTrue(tc.is_flat(-0.0199, -2.0, 0.01, 4))      # 0.25 * 4 * 0.01 * 2 = 20 mV
+        self.assertFalse(tc.is_flat(-0.0201, -2.0, 0.01, 4))
+
+
+class StepOffsets(unittest.TestCase):
+    def test_aligned(self):
+        t, volt, cur = one_step(50, 50)
+        so = tc.step_offsets(t, volt, cur)
+        self.assertEqual(so["steps"], 1)
+        r = so["rows"][0]
+        self.assertEqual((r["k"], r["kc"], r["kv"], r["offset"]), (50, 50, 50, 0))
+        self.assertEqual(so["histogram"], {"0": 1})
+        self.assertAlmostEqual(r["di_a"], 5.0, places=9)
+        self.assertAlmostEqual(r["s_since_boot"], 0.5, places=9)
+
+    def test_current_late_is_positive(self):
+        t, volt, cur = one_step(52, 50)
+        so = tc.step_offsets(t, volt, cur)
+        self.assertEqual(so["rows"][0]["offset"], 2)
+        self.assertEqual(so["rows"][0]["kv"], 50)
+
+    def test_voltage_late_is_negative(self):
+        t, volt, cur = one_step(50, 51)
+        self.assertEqual(tc.step_offsets(t, volt, cur)["rows"][0]["offset"], -1)
+
+    def test_step_down(self):
+        t, volt, cur = one_step(50, 51, down=True)
+        r = tc.step_offsets(t, volt, cur)["rows"][0]
+        self.assertLess(r["di_a"], 0)
+        self.assertGreater(r["dv_v"], 0)
+        self.assertEqual(r["offset"], -1)
+
+    def test_voltage_never_moves(self):
+        t, volt, cur = one_step(50, None)
+        so = tc.step_offsets(t, volt, cur)
+        self.assertIsNone(so["rows"][0]["offset"])
+        self.assertEqual(so["histogram"], {"none": 1})
+
+    def test_voltage_outside_window(self):
+        t, volt, cur = one_step(50, 57)
+        self.assertIsNone(tc.step_offsets(t, volt, cur)["rows"][0]["offset"])
+        t, volt, cur = one_step(50, 55)
+        self.assertEqual(tc.step_offsets(t, volt, cur)["rows"][0]["offset"], -5)
+
+    def test_mask_and_gap(self):
+        t, volt, cur = one_step(50, 50)
+        self.assertEqual(tc.step_offsets(t, volt, cur, mask=t < 400000)["steps"], 0)
+        t2 = t.copy()
+        t2[50:] += 1000000
+        self.assertEqual(tc.step_offsets(t2, volt, cur)["steps"], 0)
+
+    def test_small_change_is_not_a_step(self):
+        t, volt, cur = one_step(50, 50)
+        cur = np.where(np.arange(len(t)) >= 50, 1.9, 1.0)
+        self.assertEqual(tc.step_offsets(t, volt, cur)["steps"], 0)
+
+
+class T5(unittest.TestCase):
+    def test_current_late_holds(self):
+        t, volt, cur = one_step(50, 49)
+        p = tc.t5_check(t, volt, cur, None, 51)
+        self.assertTrue(p["graded"])
+        self.assertTrue(p["held"])
+        self.assertEqual(p["step"]["offset"], 1)
+        self.assertEqual(p["step"]["samples_before_onset"], 1)
+
+    def test_aligned_fails(self):
+        t, volt, cur = one_step(50, 50)
+        p = tc.t5_check(t, volt, cur, None, 50)
+        self.assertTrue(p["graded"])
+        self.assertFalse(p["held"])
+
+    def test_step_too_early_is_not_graded(self):
+        t, volt, cur = one_step(50, 50)
+        self.assertFalse(tc.t5_check(t, volt, cur, None, 54)["graded"])
+        self.assertTrue(tc.t5_check(t, volt, cur, None, 53)["graded"])
+
+    def test_no_voltage_change_is_not_graded(self):
+        t, volt, cur = one_step(50, None)
+        p = tc.t5_check(t, volt, cur, None, 50)
+        self.assertFalse(p["graded"])
+        self.assertIsNone(p["held"])
 
 
 class Lag(unittest.TestCase):
@@ -246,6 +388,11 @@ class Analyse(unittest.TestCase):
         self.assertIn(rep["attribution"]["mechanism"], ("A", "B", "C"))
         self.assertEqual(rep["gaps"], 0)
         self.assertEqual(rep["nominal_dt_ms"], 10.0)
+        self.assertTrue(rep["T4"]["graded"])
+        self.assertIsInstance(rep["T4"]["held"], bool)
+        self.assertIn(rep["T5"]["graded"], (True, False))
+        self.assertEqual(rep["step_offsets"]["scope"], "whole log (no takeoff time in the log)")
+        json.dumps(rep, default=tc.plain)
         tc.summary_lines(rep)
 
     def test_healthy_log(self):
@@ -258,11 +405,21 @@ class Analyse(unittest.TestCase):
         self.assertEqual(rep["armed_s_since_boot"], 9.0)
         self.assertEqual(rep["takeoff_s_since_boot"], 10.0)
         self.assertIn("lag_ground", rep)
+        so = rep["step_offsets"]
+        self.assertEqual(so["scope"], "ground and the first 5 s after takeoff")
+        # the 11 steps between 0.8 and 2.3 A (samples 625..875), plus the jump to flight current
+        self.assertGreaterEqual(so["steps"], 12)
+        self.assertTrue(all(r["s_since_boot"] < 15.0 for r in so["rows"]))
+        if not rep["collapsed"]:
+            self.assertFalse(rep["T4"]["graded"])
+            self.assertFalse(rep["T5"]["graded"])
+        json.dumps(rep, default=tc.plain)
         tc.summary_lines(rep)
 
     def test_missing_fields(self):
         rep = tc.analyse({"timestamp": np.arange(5)}, 4)
         self.assertIn("voltage_prediction", rep["stop"])
+        tc.summary_lines(rep)
 
 
 if __name__ == "__main__":

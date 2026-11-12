@@ -1,8 +1,9 @@
 """battr_trace.py: follow PX4's battery internal-resistance estimate sample by sample through a
 flight log recorded from boot with battery_status at full rate, and show which samples drove it to 0
-(px4-log-health study battery-r-2026, trace, pre-registered in studies/battery-r-2026/PLAN-trace.md).
+(px4-log-health study battery-r-2026, trace, pre-registered in studies/battery-r-2026/PLAN-trace.md,
+with the timing readouts of NOTE-trace-align.md added in 0.1.1, before any log was read).
 
-Three parts, each usable alone:
+Four parts, each usable alone:
 
 1. Hidden raw R. battery_status.internal_resistance_estimate is clamped at 0, so a log never shows
    how far below 0 PX4's estimate went. But PX4 logs voltage_prediction on every update, and after a
@@ -22,6 +23,13 @@ Three parts, each usable alone:
    previous second) or 'step', and for steps whether the voltage moved the same way as the current
    (which only a negative resistance, a timing offset or a sensor fault produces). Plus the lag at
    which voltage changes best mirror current changes.
+4. Timing (0.1.1, NOTE-trace-align.md). A step update is also 'flat' if the voltage moved less than
+   a quarter of what the current estimate expects: |dV| < 0.25 * n_cells * max(R_before, 1 mOhm) *
+   |dI|. Every current change of at least 1 A between consecutive samples on the ground or in the
+   first 5 s after takeoff gets a step offset: within +-5 samples, (sample of the largest current
+   change in the step's direction) - (sample of the largest voltage change of the opposite sign).
+   Positive means the current is late. (Note: the lag of part 3 has the opposite sign convention:
+   a positive lag there means the voltage is late.) T4 and T5 of the note are graded from these.
 
     python battr_trace.py LOG.ulg [--instance N] [--json report.json]
 
@@ -39,7 +47,7 @@ import numpy as np
 
 import replay as rp
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 ARMED = 2                   # vehicle_status ARMING_STATE_ARMED
 R_PLAUSIBLE = 0.001         # Ohm per cell: the descent window starts at the last R at or above this
@@ -57,6 +65,14 @@ RECOVER_MIN_R = 1e-4        # Ohm per cell: a logged estimate above this counts 
 GAP_FACTOR = 1.5
 MAX_LAG = 10
 TOP = 10
+
+# 0.1.1, NOTE-trace-align.md
+FLAT_FRACTION = 0.25        # flat: |dV| below this share of n_cells * max(R_before, R_PLAUSIBLE) * |dI|
+STEP_MIN_DI = 1.0           # A, a step for the offset readout and for T5
+STEP_WINDOW = 5             # samples either side
+AFTER_TAKEOFF_US = 5000000  # the offset readout covers the ground and the first 5 s after takeoff
+T4_SHARE = 0.5
+T5_BEFORE = 3               # the onset sample and the 3 samples before it
 
 # the plan's gates
 G1_MIN, G1_SHARE = 20, 0.90
@@ -257,9 +273,16 @@ def descent_start(r_raw, start, onset):
     return s
 
 
-def attribute(t, volt, cur, tr, start, onset):
+def is_flat(dv, di, r_before, n_cells):
+    """NOTE-trace-align.md: the voltage moved less than a quarter of what the current estimate
+    expects for this current change."""
+    return abs(dv) < FLAT_FRACTION * n_cells * max(r_before, R_PLAUSIBLE) * abs(di)
+
+
+def attribute(t, volt, cur, tr, start, onset, n_cells=None):
     """Accepted updates in (descent start, onset] that lowered raw R, classed quiet / step and
-    wrong-way. Returns shares of the total decrease and the mechanism letter (PLAN-trace.md)."""
+    wrong-way (and, with n_cells, flat). Returns shares of the total decrease and the mechanism
+    letter (PLAN-trace.md); the mechanism letter does not use 'flat'."""
     t = np.asarray(t, dtype=np.int64)
     s = descent_start(tr["r_raw"], start, onset)
     rows = []
@@ -274,13 +297,18 @@ def attribute(t, volt, cur, tr, start, onset):
         di = i - ip
         dv = float(volt[k]) - float(volt[k - 1])
         quiet = abs(di) < QUIET_DI and abs(i - med) < QUIET_DEV
+        r_before = float(tr["r_raw"][k]) - float(tr["d_raw"][k])
+        flat = bool(n_cells and (not quiet) and is_flat(dv, di, r_before, n_cells))
         rows.append({"k": int(k), "t_s": round((int(t[k]) - int(t[start])) / 1e6, 3),
                      "d_raw_mohm": float(tr["d_raw"][k]) * 1000.0, "r_raw_mohm": float(tr["r_raw"][k]) * 1000.0,
+                     "r_before_mohm": r_before * 1000.0,
                      "current_a": i, "di_a": di, "dv_v": dv, "median_prev_1s_a": med,
-                     "quiet": bool(quiet), "wrong_way": bool((not quiet) and dv * di > 0)})
+                     "quiet": bool(quiet), "wrong_way": bool((not quiet) and dv * di > 0), "flat": flat})
     total = sum(-r["d_raw_mohm"] for r in rows)
     quiet = sum(-r["d_raw_mohm"] for r in rows if r["quiet"])
     wrong = sum(-r["d_raw_mohm"] for r in rows if r["wrong_way"])
+    flat = sum(-r["d_raw_mohm"] for r in rows if r["flat"])
+    either = sum(-r["d_raw_mohm"] for r in rows if r["flat"] or r["wrong_way"])
     step = total - quiet
     qs = quiet / total if total > 0 else None
     ws = wrong / step if step > 0 else None
@@ -293,11 +321,16 @@ def attribute(t, volt, cur, tr, start, onset):
     else:
         mech = "C"
     top = sorted(rows, key=lambda r: r["d_raw_mohm"])[:TOP]
+    has_flat = bool(n_cells) and total > 0
     return {"descent_start": int(s), "onset": int(onset), "updates": len(rows),
             "decrease_mohm": round(total, 6), "quiet_share": round(qs, 4) if qs is not None else None,
             "step_share": round(1.0 - qs, 4) if qs is not None else None,
             "wrong_way_share_of_steps": round(ws, 4) if ws is not None else None,
-            "mechanism": mech, "top": top}
+            "mechanism": mech,
+            "flat_share": round(flat / total, 4) if has_flat else None,
+            "wrong_way_share": round(wrong / total, 4) if total > 0 else None,
+            "flat_or_wrong_share": round(either / total, 4) if has_flat else None,
+            "top": top, "rows": rows}
 
 
 def lag_profile(volt, cur, mask=None, max_lag=MAX_LAG):
@@ -324,6 +357,85 @@ def lag_profile(volt, cur, mask=None, max_lag=MAX_LAG):
         prof[lag] = round(float(np.corrcoef(aa, bb)[0, 1]), 4)
     best = min(prof, key=lambda x: prof[x]) if prof else None
     return prof, best
+
+
+# ---------------------------------------------------------------- 4. timing (0.1.1)
+
+def changes(t, volt, cur, ok=None):
+    """(dv, di, valid): dv[k] and di[k] are the voltage and current changes into sample k; valid[k]
+    if samples k - 1 and k are consecutive in time, both usable and both changes finite."""
+    t = np.asarray(t, dtype=np.int64)
+    v = np.asarray(volt, dtype=np.float64)
+    i = np.asarray(cur, dtype=np.float64)
+    n = len(t)
+    dv = np.full(n, np.nan)
+    di = np.full(n, np.nan)
+    if n > 1:
+        dv[1:] = np.diff(v)
+        di[1:] = np.diff(i)
+    ok = usable(v) if ok is None else np.asarray(ok, dtype=bool)
+    valid = consecutive(t, nominal_dt(t)) & np.isfinite(dv) & np.isfinite(di)
+    if n > 1:
+        valid[1:] &= ok[1:] & ok[:-1]
+    if n:
+        valid[0] = False
+    return dv, di, valid
+
+
+def step_offset(k, dv, di, valid, window=STEP_WINDOW):
+    """For a current step into sample k: within k - window .. k + window (valid samples only), kc
+    is the sample with the largest current change in the step's direction and kv the sample with
+    the largest voltage change of the opposite sign (earliest on ties). offset = kc - kv (positive:
+    the current is late), or None if no voltage change of the opposite sign is in the window."""
+    n = len(di)
+    sgn = 1.0 if di[k] > 0 else -1.0
+    js = [j for j in range(max(1, k - window), min(n - 1, k + window) + 1) if valid[j]]
+    kc = max(js, key=lambda j: (sgn * di[j], -j))
+    opp = [j for j in js if -sgn * dv[j] > 0]
+    kv = max(opp, key=lambda j: (-sgn * dv[j], -j)) if opp else None
+    return {"k": int(k), "di_a": float(di[k]), "kc": int(kc), "kv": int(kv) if kv is not None else None,
+            "dv_v": float(dv[kv]) if kv is not None else None,
+            "offset": int(kc - kv) if kv is not None else None}
+
+
+def step_offsets(t, volt, cur, ok=None, mask=None):
+    """Every valid pair of consecutive samples (k - 1, k) with |dI| >= STEP_MIN_DI (and mask[k], if
+    given), with its step offset. Returns the rows and a histogram of the offsets."""
+    t = np.asarray(t, dtype=np.int64)
+    dv, di, valid = changes(t, volt, cur, ok)
+    sel = valid & (np.abs(np.nan_to_num(di, nan=0.0)) >= STEP_MIN_DI)
+    if mask is not None:
+        sel &= np.asarray(mask, dtype=bool)
+    rows = []
+    for k in np.flatnonzero(sel):
+        r = step_offset(int(k), dv, di, valid)
+        r["s_since_boot"] = round(int(t[k]) / 1e6, 3)
+        rows.append(r)
+    hist = {}
+    for r in rows:
+        key = "none" if r["offset"] is None else str(r["offset"])
+        hist[key] = hist.get(key, 0) + 1
+    return {"steps": len(rows), "histogram": hist, "rows": rows}
+
+
+def t5_check(t, volt, cur, ok, onset):
+    """T5 (NOTE-trace-align.md): among the current steps of at least 1 A into the onset sample or
+    the 3 samples before it, take the largest (earliest on ties); T5 holds if its offset is not 0.
+    Not graded if there is no such step, or if no voltage change of the opposite sign is within
+    +-5 samples (then no offset can be read)."""
+    dv, di, valid = changes(t, volt, cur, ok)
+    ks = [k for k in range(max(1, onset - T5_BEFORE), onset + 1)
+          if valid[k] and abs(di[k]) >= STEP_MIN_DI]
+    if not ks:
+        return {"graded": False, "held": None,
+                "reason": "no current step of at least 1 A in the onset sample or the 3 before it"}
+    k = max(ks, key=lambda j: (abs(di[j]), -j))
+    so = step_offset(k, dv, di, valid)
+    so["samples_before_onset"] = int(onset - k)
+    if so["offset"] is None:
+        return {"graded": False, "held": None, "step": so,
+                "reason": "no voltage change of the opposite sign within 5 samples of the step"}
+    return {"graded": True, "held": so["offset"] != 0, "step": so}
 
 
 # ---------------------------------------------------------------- one log
@@ -425,13 +537,37 @@ def analyse(bat, n_cells, status=None, land=None):
     rep["gates"] = gates
     rep["collapsed"] = log_onset is not None
     if log_onset is not None and rep_onset is not None and gates["G3_replay"]:
-        rep["attribution"] = attribute(t, volt, cur, tr, start, rep_onset)
+        rep["attribution"] = attribute(t, volt, cur, tr, start, rep_onset, n_cells)
         rep["attribution"]["s_since_boot"] = s_of(rep_onset)
     ground = cons.copy()
     if takeoff_t is not None:
         ground &= t < takeoff_t
     prof, best = lag_profile(volt, cur, ground)
     rep["lag_ground"] = {"best": best, "corr": prof}
+
+    # 0.1.1: NOTE-trace-align.md readouts
+    if takeoff_t is not None:
+        so = step_offsets(t, volt, cur, ok, t < takeoff_t + AFTER_TAKEOFF_US)
+        so["scope"] = "ground and the first 5 s after takeoff"
+    else:
+        so = step_offsets(t, volt, cur, ok)
+        so["scope"] = "whole log (no takeoff time in the log)"
+    rep["step_offsets"] = so
+    graded = gates["G2_anchor"] and gates["G3_replay"]
+    a = rep.get("attribution")
+    if graded and a is not None and a.get("flat_or_wrong_share") is not None:
+        rep["T4"] = {"graded": True, "held": a["flat_or_wrong_share"] >= T4_SHARE,
+                     "flat_or_wrong_share": a["flat_or_wrong_share"], "flat_share": a["flat_share"],
+                     "wrong_way_share": a["wrong_way_share"]}
+    else:
+        rep["T4"] = {"graded": False, "held": None,
+                     "reason": "no collapse" if log_onset is None else
+                     ("G2 or G3 failed" if not graded else "no decrease in the descent window")}
+    if graded and log_onset is not None:
+        rep["T5"] = t5_check(t, volt, cur, ok, log_onset)
+    else:
+        rep["T5"] = {"graded": False, "held": None,
+                     "reason": "no collapse" if log_onset is None else "G2 or G3 failed"}
     return rep
 
 
@@ -467,7 +603,8 @@ def read_log(path, instance=None):
             if p.get(name):
                 n_cells = int(p[name])
                 break
-    params = {k: p.get(k) for k in ("SDLOG_MODE", "SDLOG_PROFILE", "BAT1_R_INTERNAL", "BAT1_N_CELLS")}
+    params = {k: p.get(k) for k in ("SDLOG_MODE", "SDLOG_PROFILE", "BAT1_R_INTERNAL", "BAT1_N_CELLS",
+                                    "BAT1_SOURCE", "BAT1_I_OVERWRITE")}
     return bat, n_cells, status, land, instance, params
 
 
@@ -510,7 +647,19 @@ def summary_lines(rep):
     if a:
         out.append("descent to 0: %d updates, quiet share %s, wrong-way share of steps %s -> mechanism %s" % (
             a["updates"], a["quiet_share"], a["wrong_way_share_of_steps"], a["mechanism"]))
-    out.append("voltage/current lag on the ground: best L = %s samples" % rep["lag_ground"]["best"])
+        out.append("flat share %s, flat or wrong-way share %s of the decrease" % (
+            a["flat_share"], a["flat_or_wrong_share"]))
+    out.append("voltage/current lag on the ground: best L = %s samples (positive: voltage late)" %
+               rep["lag_ground"]["best"])
+    so = rep.get("step_offsets")
+    if so is not None:
+        out.append("current steps >= 1 A (%s): %d, offsets (positive: current late) %s" % (
+            so["scope"], so["steps"], json.dumps(so["histogram"], sort_keys=True)))
+    for name in ("T4", "T5"):
+        p = rep.get(name)
+        if p is not None:
+            out.append("%s: %s" % (name, ("held" if p["held"] else "failed") if p["graded"]
+                                   else "not graded (%s)" % p.get("reason")))
     return out
 
 
