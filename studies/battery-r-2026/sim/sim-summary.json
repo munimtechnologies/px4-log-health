@@ -1,0 +1,89 @@
+{
+ "sim": "0.1.0",
+ "replay": "0.1.0",
+ "seeds": 200,
+ "predictions": {
+  "H1": true,
+  "H2": true,
+  "H3": false,
+  "H4": true,
+  "H5": false,
+  "H6": true
+ },
+ "reported": {
+  "h1_quiet_cell": {
+   "at_takeoff": 0,
+   "n": 200
+  },
+  "h2_noisy": [
+   319,
+   800,
+   0.3987
+  ],
+  "h2_quiet": [
+   121,
+   800,
+   0.1512
+  ],
+  "h2_diff": 0.2475,
+  "h3_both": 326,
+  "h3_at_takeoff": 608,
+  "h3_share": 0.5362,
+  "px4_at_takeoff": [
+   608,
+   2400,
+   0.2533
+  ],
+  "f1_at_takeoff": [
+   0,
+   2400,
+   0.0
+  ],
+  "px4_in_flight": [
+   526,
+   2400,
+   0.2192
+  ],
+  "f2_in_flight": [
+   413,
+   2400,
+   0.1721
+  ],
+  "h6_runs": 1874,
+  "h6_median_rel_err": 0.2546,
+  "fleet": {
+   "source": "GRADE.md: 10 of 75 measurable public flights collapsed",
+   "collapsed": 10,
+   "n": 75
+  }
+ },
+ "wall_s": 49.5,
+ "model": {
+  "n_cells": 4,
+  "r0": 0.0027,
+  "r1": 0.001,
+  "tau_s": 20.0,
+  "ground_s": 60.0,
+  "spool_s": 3.0,
+  "flight_s": 120.0,
+  "noise": {
+   "quiet": [
+    0.005,
+    0.02
+   ],
+   "typical": [
+    0.015,
+    0.05
+   ],
+   "noisy": [
+    0.04,
+    0.15
+   ]
+  },
+  "q_v": 0.0145,
+  "q_i": 0.029,
+  "events": 5,
+  "event_a": 1.5,
+  "small_r_cov": 0.001
+ }
+}

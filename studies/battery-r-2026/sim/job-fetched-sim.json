@@ -1,0 +1,37 @@
+{
+ "px4-log-health/main/studies/battery-r-2026/PLAN-sim.md": {
+  "sha256": "aed76c98b40e4b20d5e258350c1d40f3e90164c0ac1d47a9e313fd43c7d7de64",
+  "bytes": 9297
+ },
+ "px4-log-health/main/studies/battery-r-2026/replay.py": {
+  "sha256": "99ff3761ddfd020eee480126184fb0694202b9762e4722bc9cf29e47c7376f09",
+  "bytes": 25913,
+  "git_blob": "4199dd45a5e7cae90ed81fc157cf2cc297511936"
+ },
+ "local/PLAN-sim.md": {
+  "sha256": "aed76c98b40e4b20d5e258350c1d40f3e90164c0ac1d47a9e313fd43c7d7de64",
+  "bytes": 9297
+ },
+ "local/sim.py": {
+  "sha256": "91a0aa7062fea457c550fe78f0256f76b08f105c34580844a26408111bd15ccd",
+  "bytes": 18362
+ },
+ "local/test_sim.py": {
+  "sha256": "63611d4dda65431bb95ae5056756f66762fa1b452a596a4da5964454f53a300c",
+  "bytes": 10138
+ },
+ "local/job_fetch_sim.py": {
+  "sha256": "25d883b6f499c1472d90009d9858e007e261fe069184ca053eb7de71bb1131b3",
+  "bytes": 4931
+ },
+ "PX4/PX4-Autopilot/main/src/lib/battery/battery.h": {
+  "sha256": "b57a8a9eda27acaf476939ab6a3cb6ca7402bf5a397cdbaae229a37345d833a3",
+  "bytes": 8816,
+  "commit": "b4da2c3d264ff041355d2591806c0435a7a33300"
+ },
+ "PX4/PX4-Autopilot/main/src/lib/battery/battery.cpp": {
+  "sha256": "930ee5b92a708aad37e25b40405ef8dd466929720aa4900a8453e1a0085b1657",
+  "bytes": 17845,
+  "commit": "b4da2c3d264ff041355d2591806c0435a7a33300"
+ }
+}
