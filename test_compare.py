@@ -1,4 +1,4 @@
-"""Tests for compare.py on synthetic checkup rows (no logs, no numpy needed).
+"""Tests for compare.py 0.2.0 on synthetic checkup rows (no logs, no numpy needed).
 
 By MV2 of Munim, Inc.; written with AI agents. Apache-2.0.
 """
@@ -33,6 +33,9 @@ def item(result, name):
 
 
 class TestSame(unittest.TestCase):
+    def test_version(self):
+        self.assertEqual(cm.__version__, "0.2.0")
+
     def test_identical_rows_change_nothing(self):
         r = row()
         out = cm.compare_rows(r, copy.deepcopy(r), {"A": 1}, {"A": 1})
@@ -42,6 +45,7 @@ class TestSame(unittest.TestCase):
         self.assertEqual(out["params"], {"settings": [], "learned": [], "volatile": []})
         self.assertFalse(out["firmware"]["changed"])
         self.assertEqual(out["compared"], 10)
+        self.assertEqual(out["coverage"], {"compared": 10, "checks": 10, "not_comparable": [], "complete": True})
         for i in out["items"]:
             self.assertEqual(i["status"], "same", i)
 
@@ -71,12 +75,41 @@ class TestGpsLag(unittest.TestCase):
         out = cm.compare_rows(row(lag=110.0, se=20.0, d=0.0), row(lag=150.0, se=20.0, d=40.0))
         self.assertEqual(item(out, "gps_lag_ms")["status"], "same")
 
+    def test_missing_se_on_a_large_change_is_not_comparable(self):
+        # 0.1.0 took the missing SE as 0 and called this 'worse'
+        out = cm.compare_rows(row(lag=110.0, se=None, d=0.0), row(lag=150.0, d=40.0))
+        i = item(out, "gps_lag_ms")
+        self.assertEqual(i["status"], "not comparable")
+        self.assertEqual(i["delta"], 40.0)
+        self.assertIn("no standard error on the before log", i["why"])
+        self.assertEqual(out["worse"], [])
+        self.assertEqual(out["coverage"]["not_comparable"], ["gps_lag_ms"])
+        self.assertEqual(out["verdict"], "no change beyond the rules (only 9 of 10 checks comparable)")
+
+    def test_zero_or_nan_se_is_missing(self):
+        for bad in (0.0, -1.0, float("nan"), "n/a"):
+            out = cm.compare_rows(row(lag=110.0, d=0.0), row(lag=150.0, se=bad, d=40.0))
+            i = item(out, "gps_lag_ms")
+            self.assertEqual(i["status"], "not comparable", bad)
+            self.assertIn("the after log", i["why"])
+
+    def test_missing_se_on_a_small_change_is_same(self):
+        # the rule needs both conditions to fire, so a 15 ms change is 'same' whatever the SE
+        out = cm.compare_rows(row(lag=110.0, se=None, d=0.0), row(lag=125.0, se=None, d=15.0))
+        i = item(out, "gps_lag_ms")
+        self.assertEqual(i["status"], "same")
+        self.assertIn("no standard error on both logs", i["why"])
+        self.assertTrue(out["coverage"]["complete"])
+
     def test_not_measured(self):
         b = row()
         b["gps_verdict"] = {"status": "not measured", "reason": "hover"}
         out = cm.compare_rows(b, row())
         self.assertEqual(item(out, "gps_lag_ms")["status"], "not comparable")
         self.assertEqual(item(out, "gps_delay_status")["status"], "not comparable")
+        self.assertEqual(out["coverage"]["not_comparable"], ["gps_lag_ms", "gps_delay_status"])
+        self.assertEqual(out["compared"], 8)
+        self.assertEqual(out["verdict"], "no change beyond the rules (only 8 of 10 checks comparable)")
 
     def test_status_ok_to_off_is_worse(self):
         out = cm.compare_rows(row(lag=150.0, d=40.0, status="ok"), row(lag=165.0, d=55.0, status="off"))
@@ -100,6 +133,16 @@ class TestInnov(unittest.TestCase):
         a["gps"]["innov"] = {"passed": False, "reason": "too few samples"}
         out = cm.compare_rows(row(), a)
         self.assertEqual(item(out, "gps_innov_excess_ms")["status"], "not comparable")
+
+    def test_innov_missing_se(self):
+        out = cm.compare_rows(row(implied=-10.0, implied_se=None), row(implied=-45.0))
+        i = item(out, "gps_innov_excess_ms")
+        self.assertEqual(i["status"], "not comparable")
+        self.assertEqual(i["delta"], 35.0)
+        out = cm.compare_rows(row(implied=-10.0), row(implied=-45.0, implied_se=float("nan")))
+        self.assertEqual(item(out, "gps_innov_excess_ms")["status"], "not comparable")
+        out = cm.compare_rows(row(implied=-10.0, implied_se=None), row(implied=-20.0, implied_se=None))
+        self.assertEqual(item(out, "gps_innov_excess_ms")["status"], "same")
 
 
 class TestVibration(unittest.TestCase):
@@ -162,6 +205,12 @@ class TestOtherItems(unittest.TestCase):
         self.assertEqual(item(out, "failsafe_in_flight")["status"], "worse")
         self.assertEqual(out["verdict"], "worse on 2 items")
 
+    def test_worse_with_missing_data_says_so(self):
+        a = row(warn=1)
+        a["compass"] = {"level": "not checked", "class": None}
+        out = cm.compare_rows(row(), a)
+        self.assertEqual(out["verdict"], "worse on 1 item (only 9 of 10 checks comparable)")
+
     def test_environment_never_counts(self):
         out = cm.compare_rows(row(sats=16.0, eph=0.5), row(sats=9.0, eph=1.2))
         self.assertEqual(item(out, "satellites_median")["status"], "worse")
@@ -175,6 +224,18 @@ class TestOtherItems(unittest.TestCase):
         out = cm.compare_rows(b, row())
         self.assertEqual(item(out, "vibration_median")["status"], "not comparable")
         self.assertEqual(item(out, "battery_warning")["status"], "not comparable")
+        self.assertEqual(out["compared"], 5)
+        self.assertEqual(out["coverage"]["not_comparable"],
+                         ["vibration_median", "clipping_per_min", "motor_saturation_share", "battery_warning",
+                          "failsafe_in_flight"])
+        self.assertEqual(out["verdict"], "no change beyond the rules (only 5 of 10 checks comparable)")
+
+    def test_nothing_comparable(self):
+        empty = {"health": {"health_ok": False}, "gps_verdict": {}, "gps": {}, "compass": {}, "battery": {}}
+        out = cm.compare_rows(empty, copy.deepcopy(empty))
+        self.assertEqual(out["compared"], 0)
+        self.assertEqual(out["verdict"], "not comparable")
+        self.assertEqual(out["coverage"]["checks"], 10)
 
 
 class TestParams(unittest.TestCase):
@@ -218,14 +279,34 @@ class TestRender(unittest.TestCase):
         self.assertEqual(len(out["notes"]), 1)
         md = cm.render(out, "a.ulg", "b.ulg")
         self.assertIn("**Verdict: changed, nothing worse.**", md)
+        self.assertIn("Checks compared: 10 of 10 vehicle checks.", md)
         self.assertIn("v1.16.0 -> v1.17.0 (changed)", md)
         self.assertIn("1 setting differs between the two logs:", md)
         self.assertIn("- GPS_UBX_DYNMODEL: 6 -> 7", md)
         self.assertIn("| gps_lag_ms | 200.0 | 105.0 | -95.0 | better", md)
         self.assertIn("made with AI agents", md)
+        self.assertIn(cm.PHYSICAL_CAVEAT, md)
+        self.assertIn("compare 0.2.0", md)
+
+    def test_render_missing(self):
+        out = cm.compare_rows(row(lag=110.0, se=None, d=0.0), row(lag=150.0, d=40.0))
+        md = cm.render(out)
+        self.assertIn("**Verdict: no change beyond the rules (only 9 of 10 checks comparable).**", md)
+        self.assertIn("Checks compared: 9 of 10 vehicle checks; not comparable (missing or unusable data, "
+                      "never counted as a pass): gps_lag_ms.", md)
+        self.assertIn("| gps_lag_ms | 110.0 | 150.0 | 40.0 | not comparable: changed by more than 30 ms", md)
 
     def test_plain_row(self):
         self.assertEqual(cm.plain_row({"a": 1, "b": [True, None]}), {"a": 1, "b": [True, None]})
+
+
+class TestExitCode(unittest.TestCase):
+    def test_exit_codes(self):
+        self.assertEqual(cm.exit_code({"worse": ["x"], "compared": 10}, fail_on_worse=True), 1)
+        self.assertEqual(cm.exit_code({"worse": ["x"], "compared": 10}), 0)
+        self.assertEqual(cm.exit_code({"worse": [], "compared": 5}, min_compared=8), 2)
+        self.assertEqual(cm.exit_code({"worse": [], "compared": 8}, min_compared=8), 0)
+        self.assertEqual(cm.exit_code({"worse": ["x"], "compared": 5}, fail_on_worse=True, min_compared=8), 1)
 
 
 if __name__ == "__main__":

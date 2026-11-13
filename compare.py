@@ -12,12 +12,26 @@ how often each rule fires on public pairs of flights of one vehicle where
 nothing was changed, which is the false-alarm rate of this comparison.
 
     python compare.py before.ulg after.ulg [--md report.md] [--json result.json]
+                      [--fail-on-worse] [--min-compared N]
 
 A 'worse' item is a reason to look at both logs in Flight Review, not a
 verdict on the change. Two flights also differ in wind, payload, battery and
 how they were flown, and 'environment' items (satellites, eph) are listed
 but never counted against the vehicle. Passing every item does not show that
 the vehicle is safe to fly.
+
+Changes in 0.2.0 (suggested by yigitcan-ozturk on discuss.px4.io topic 49705,
+post 13; the thresholds are unchanged, so the frozen 0.1.0 study still applies):
+- C1/C2: a missing standard error (or one that is 0 or not finite) is no
+  longer taken as 0. A change within 30 ms is still 'same' (the rule needs
+  both conditions to fire); a larger change with no standard error on one
+  log is 'not comparable', because it cannot be weighed against its noise.
+- The verdict and the report's headline say how many of the 10 vehicle
+  checks could be compared and name the ones that could not, so a report
+  with missing data does not read as full assurance.
+- The report states that the same logged firmware and settings do not mean
+  the same physical vehicle.
+- --min-compared N exits 2 when fewer than N vehicle checks were compared.
 
 By MV2 of Munim, Inc.; written with AI agents. Apache-2.0.
 """
@@ -30,7 +44,7 @@ import math
 import re
 import sys
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 LAG_MS = 30.0          # C1/C2: a GPS lag or innovation change must exceed this many ms ...
 LAG_SE = 2.0           # ... and this many combined standard errors
@@ -48,6 +62,8 @@ VOLATILE = frozenset(("LND_FLIGHT_T_HI", "LND_FLIGHT_T_LO", "COM_FLIGHT_UUID"))
 LEARNED = re.compile(r"^(CAL_(ACC|GYRO|MAG|BARO)\d_([XYZ])?OFF|CAL_(ACC|GYRO|MAG|BARO)\d_TEMP|"
                      r"EKF2_MAG_DECL|SENS_DPRES_OFF)$")
 VEHICLE, ENVIRONMENT, CONFIG = "vehicle", "environment", "config"
+PHYSICAL_CAVEAT = ("The same firmware and settings in both logs do not mean the same physical vehicle: payload, "
+                   "battery condition, props and how it was flown can differ between the two flights.")
 
 
 def _num(x):
@@ -61,13 +77,23 @@ def _num(x):
     return x if math.isfinite(x) else None
 
 
+def _se(x):
+    """A standard error as a positive finite float, or None (missing, 0, negative or not finite)."""
+    x = _num(x)
+    return x if x is not None and x > 0 else None
+
+
 def _item(name, kind, status, before=None, after=None, delta=None, rule="", why=""):
     return {"item": name, "kind": kind, "status": status, "before": before, "after": after,
             "delta": delta, "rule": rule, "why": why}
 
 
-def _na(name, kind, why, before=None, after=None, rule=""):
-    return _item(name, kind, "not comparable", before, after, None, rule, why)
+def _na(name, kind, why, before=None, after=None, rule="", delta=None):
+    return _item(name, kind, "not comparable", before, after, delta, rule, why)
+
+
+def _which(missing_b, missing_a):
+    return "both logs" if missing_b and missing_a else ("the before log" if missing_b else "the after log")
 
 
 def param_class(name):
@@ -105,19 +131,36 @@ def param_diff(before, after):
     return out
 
 
+def _lag_change(name, rule, xb, xa, d, seb, sea):
+    """The shared C1/C2 decision. Returns (status or None, why). None means 'goes on to direction'."""
+    if abs(d) <= LAG_MS:
+        why = "within %.0f ms" % LAG_MS
+        if seb is None or sea is None:
+            why += " (no standard error on %s)" % _which(seb is None, sea is None)
+        return "same", why
+    if seb is None or sea is None:
+        return "not comparable", ("changed by more than %.0f ms, but there is no standard error on %s, so the "
+                                  "change cannot be weighed against its noise" % (LAG_MS, _which(seb is None, sea is None)))
+    se = math.sqrt(seb ** 2 + sea ** 2)
+    if abs(d) <= LAG_SE * se:
+        return "same", "within %.0f combined SE (%.1f ms)" % (LAG_SE, se)
+    return None, "combined SE %.1f ms" % se
+
+
 def _gps_lag(rb, ra):
     """C1: the GPS lag behind the IMU (gps_lag.py, via checkup's gps_verdict)."""
     rule = "C1: |change| > %.0f ms and > %.0f combined SE" % (LAG_MS, LAG_SE)
     vb, va = rb.get("gps_verdict") or {}, ra.get("gps_verdict") or {}
     lb, la = _num(vb.get("lag_ms")), _num(va.get("lag_ms"))
     if lb is None or la is None:
-        return _na("gps_lag_ms", VEHICLE, "GPS lag not measured on %s" % (
-            "both logs" if lb is None and la is None else ("the before log" if lb is None else "the after log")),
-            lb, la, rule)
-    se = math.sqrt((_num(vb.get("se_ms")) or 0.0) ** 2 + (_num(va.get("se_ms")) or 0.0) ** 2)
+        return _na("gps_lag_ms", VEHICLE, "GPS lag not measured on %s" % _which(lb is None, la is None),
+                   lb, la, rule)
     d = round(la - lb, 1)
-    if abs(d) <= LAG_MS or abs(d) <= LAG_SE * se:
-        return _item("gps_lag_ms", VEHICLE, "same", lb, la, d, rule, "within the rule (combined SE %.1f ms)" % se)
+    status, why = _lag_change("gps_lag_ms", rule, lb, la, d, _se(vb.get("se_ms")), _se(va.get("se_ms")))
+    if status == "not comparable":
+        return _na("gps_lag_ms", VEHICLE, why, lb, la, rule, d)
+    if status:
+        return _item("gps_lag_ms", VEHICLE, status, lb, la, d, rule, why)
     db, da = _num(vb.get("d_ms")), _num(va.get("d_ms"))
     if db is None or da is None:
         return _item("gps_lag_ms", VEHICLE, "changed", lb, la, d, rule,
@@ -150,13 +193,15 @@ def _innov(rb, ra):
     xb = _num(ib.get("implied_excess_ms")) if ib.get("passed") else None
     xa = _num(ia.get("implied_excess_ms")) if ia.get("passed") else None
     if xb is None or xa is None:
-        return _na("gps_innov_excess_ms", VEHICLE, "EKF2 innovations not checked on %s" % (
-            "both logs" if xb is None and xa is None else ("the before log" if xb is None else "the after log")),
-            xb, xa, rule)
-    se = math.sqrt((_num(ib.get("implied_se_ms")) or 0.0) ** 2 + (_num(ia.get("implied_se_ms")) or 0.0) ** 2)
+        return _na("gps_innov_excess_ms", VEHICLE, "EKF2 innovations not checked on %s" % _which(xb is None, xa is None),
+                   xb, xa, rule)
     d = round(abs(xa) - abs(xb), 1)
-    if abs(d) <= LAG_MS or abs(d) <= LAG_SE * se:
-        return _item("gps_innov_excess_ms", VEHICLE, "same", xb, xa, d, rule)
+    status, why = _lag_change("gps_innov_excess_ms", rule, xb, xa, d,
+                              _se(ib.get("implied_se_ms")), _se(ia.get("implied_se_ms")))
+    if status == "not comparable":
+        return _na("gps_innov_excess_ms", VEHICLE, why, xb, xa, rule, d)
+    if status:
+        return _item("gps_innov_excess_ms", VEHICLE, status, xb, xa, d, rule, why)
     return _item("gps_innov_excess_ms", VEHICLE, "better" if d < 0 else "worse", xb, xa, d, rule,
                  "EKF2's innovations imply %s mismatch with the delay setting" % ("less" if d < 0 else "more"))
 
@@ -171,10 +216,11 @@ def _vibration(rb, ra):
     rule = "C3: ratio >= %.1f (or <= 1/%.1f) and |change| >= %.1f m/s^2" % (VIB_RATIO, VIB_RATIO, VIB_ABS)
     hb, ha = _health(rb), _health(ra)
     if hb is None or ha is None:
-        return _na("vibration_median", VEHICLE, "health not read on one log", rule=rule)
+        return _na("vibration_median", VEHICLE, "health not read on %s" % _which(hb is None, ha is None), rule=rule)
     vb, va = _num(hb.get("vib_median")), _num(ha.get("vib_median"))
     if vb is None or va is None:
-        return _na("vibration_median", VEHICLE, "vibration not logged on one log", vb, va, rule)
+        return _na("vibration_median", VEHICLE, "vibration not logged on %s" % _which(vb is None, va is None),
+                   vb, va, rule)
     if hb.get("vib_units") == "m/s" or ha.get("vib_units") == "m/s":
         return _na("vibration_median", VEHICLE, "PX4 v1.12 or older units (m/s) on one log", vb, va, rule)
     d = round(va - vb, 3)
@@ -192,7 +238,7 @@ def _clipping(rb, ra):
     rule = "C4: clipping starts or stops, or its rate changes %.0f-fold" % CLIP_RATIO
     hb, ha = _health(rb), _health(ra)
     if hb is None or ha is None:
-        return _na("clipping_per_min", VEHICLE, "health not read on one log", rule=rule)
+        return _na("clipping_per_min", VEHICLE, "health not read on %s" % _which(hb is None, ha is None), rule=rule)
     cb, ca = hb.get("clip_count"), ha.get("clip_count")
     pb, pa = _num(hb.get("clip_per_min")), _num(ha.get("clip_per_min"))
     if cb is None or ca is None or pb is None or pa is None:
@@ -216,10 +262,12 @@ def _saturation(rb, ra):
     rule = "C5: |change| >= %.0f percentage points" % (100 * SAT_POINTS)
     hb, ha = _health(rb), _health(ra)
     if hb is None or ha is None:
-        return _na("motor_saturation_share", VEHICLE, "health not read on one log", rule=rule)
+        return _na("motor_saturation_share", VEHICLE, "health not read on %s" % _which(hb is None, ha is None),
+                   rule=rule)
     sb, sa = _num(hb.get("sat_share")), _num(ha.get("sat_share"))
     if sb is None or sa is None:
-        return _na("motor_saturation_share", VEHICLE, "motor commands not read on one log", sb, sa, rule)
+        return _na("motor_saturation_share", VEHICLE, "motor commands not read on %s" % _which(sb is None, sa is None),
+                   sb, sa, rule)
     d = round(sa - sb, 4)
     if d >= SAT_POINTS - 1e-9:
         return _item("motor_saturation_share", VEHICLE, "worse", sb, sa, d, rule)
@@ -234,7 +282,8 @@ def _compass(rb, ra):
     cb, ca = (rb.get("compass") or {}).get("class"), (ra.get("compass") or {}).get("class")
     pb, pa = _num((rb.get("compass") or {}).get("coupling_pct")), _num((ra.get("compass") or {}).get("coupling_pct"))
     if cb not in COMPASS_ORDER or ca not in COMPASS_ORDER:
-        return _na("compass_coupling", VEHICLE, "compass coupling not measurable on one log", cb, ca, rule)
+        return _na("compass_coupling", VEHICLE, "compass coupling not measurable on %s" % _which(
+            cb not in COMPASS_ORDER, ca not in COMPASS_ORDER), cb, ca, rule)
     d = None if pb is None or pa is None else round(pa - pb, 3)
     why = "%s -> %s" % ("n/a" if pb is None else "%.1f%%" % pb, "n/a" if pa is None else "%.1f%%" % pa)
     if COMPASS_ORDER[ca] > COMPASS_ORDER[cb]:
@@ -249,7 +298,8 @@ def _battery_r(rb, ra):
     rule = "C7: collapse appears or goes away"
     bb, ba = (rb.get("battery") or {}).get("collapsed"), (ra.get("battery") or {}).get("collapsed")
     if not isinstance(bb, bool) or not isinstance(ba, bool):
-        return _na("battery_r_collapse", VEHICLE, "battery-resistance estimate not measurable on one log", bb, ba, rule)
+        return _na("battery_r_collapse", VEHICLE, "battery-resistance estimate not measurable on %s" % _which(
+            not isinstance(bb, bool), not isinstance(ba, bool)), bb, ba, rule)
     if bb == ba:
         return _item("battery_r_collapse", VEHICLE, "same", bb, ba, None, rule)
     return _item("battery_r_collapse", VEHICLE, "worse" if ba else "better", bb, ba, None, rule,
@@ -261,11 +311,11 @@ def _event(name, rule, key, test):
         hb, ha = _health(rb), _health(ra)
         if hb is None or ha is None or hb.get(key) is None or ha.get(key) is None:
             return _na(name, VEHICLE, "not logged on one log", rule=rule)
-            # (a missing figure is not a change)
         xb, xa = test(hb.get(key)), test(ha.get(key))
         if xb == xa:
             return _item(name, VEHICLE, "same", hb.get(key), ha.get(key), None, rule)
         return _item(name, VEHICLE, "worse" if xa else "better", hb.get(key), ha.get(key), None, rule)
+    check.__name__ = "_" + name
     return check
 
 
@@ -301,12 +351,22 @@ def _eph(rb, ra):
 
 CHECKS = (_gps_lag, _gps_match, _innov, _vibration, _clipping, _saturation, _compass, _battery_r,
           _battery_warning, _failsafe, _sats, _eph)
+VEHICLE_CHECKS = 10
+
+
+def coverage_of(items):
+    """{'compared', 'checks', 'not_comparable': [names], 'complete'} over the vehicle items."""
+    veh = [i for i in items if i["kind"] == VEHICLE]
+    missing = [i["item"] for i in veh if i["status"] == "not comparable"]
+    return {"compared": len(veh) - len(missing), "checks": len(veh), "not_comparable": missing,
+            "complete": not missing}
 
 
 def compare_rows(rb, ra, params_b=None, params_a=None):
     """Compare two checkup.check() rows (before, after) and, when given, their initial parameters.
 
-    Returns {'compare', 'items', 'firmware', 'params', 'notes', 'worse', 'better', 'verdict'}."""
+    Returns {'compare', 'items', 'firmware', 'params', 'notes', 'worse', 'better', 'compared',
+    'coverage', 'verdict'}."""
     items = []
     for check in CHECKS:
         try:
@@ -325,16 +385,20 @@ def compare_rows(rb, ra, params_b=None, params_a=None):
     worse = [i["item"] for i in items if i["kind"] == VEHICLE and i["status"] == "worse"]
     better = [i["item"] for i in items if i["kind"] == VEHICLE and i["status"] == "better"]
     compared = [i for i in items if i["kind"] == VEHICLE and i["status"] != "not comparable"]
+    cov = coverage_of(items)
     if not compared:
         verdict = "not comparable"
-    elif worse:
-        verdict = "worse on %d item%s" % (len(worse), "" if len(worse) == 1 else "s")
-    elif better or any(i["status"] == "changed" for i in compared):
-        verdict = "changed, nothing worse"
     else:
-        verdict = "no change beyond the rules"
+        if worse:
+            verdict = "worse on %d item%s" % (len(worse), "" if len(worse) == 1 else "s")
+        elif better or any(i["status"] == "changed" for i in compared):
+            verdict = "changed, nothing worse"
+        else:
+            verdict = "no change beyond the rules"
+        if not cov["complete"]:
+            verdict += " (only %d of %d checks comparable)" % (cov["compared"], cov["checks"])
     return {"compare": __version__, "items": items, "firmware": firmware, "params": pd, "notes": notes,
-            "worse": worse, "better": better, "compared": len(compared), "verdict": verdict}
+            "worse": worse, "better": better, "compared": len(compared), "coverage": cov, "verdict": verdict}
 
 
 def _fmt(x):
@@ -354,6 +418,12 @@ def render(result, name_b="before", name_a="after"):
              "agents). A 'worse' item is a reason to look at both logs, not a verdict on the change; rules: "
              "studies/compare-2026/PLAN.md." % (name_b, name_a, result["compare"]), "",
              "**Verdict: %s.**" % result["verdict"], ""]
+    cov = result.get("coverage") or coverage_of(result["items"])
+    line = "Checks compared: %d of %d vehicle checks" % (cov["compared"], cov["checks"])
+    if cov["not_comparable"]:
+        line += "; not comparable (missing or unusable data, never counted as a pass): %s" % ", ".join(
+            cov["not_comparable"])
+    lines += [line + ".", ""]
     fw = result["firmware"]
     lines += ["Firmware: %s -> %s%s." % (fw["before"] or "unknown", fw["after"] or "unknown",
                                           " (changed)" if fw["changed"] else ""), ""]
@@ -380,7 +450,17 @@ def render(result, name_b="before", name_a="after"):
             if len(s) > 60:
                 lines.append("- ... and %d more" % (len(s) - 60))
         lines += ["", "Values PX4 learns and saves itself (sensor offsets, declination): %d changed." % len(pd["learned"]), ""]
+    lines += [PHYSICAL_CAVEAT + " Passing every item does not show that the vehicle is safe to fly.", ""]
     return "\n".join(lines) + "\n"
+
+
+def exit_code(result, fail_on_worse=False, min_compared=None):
+    """1 if --fail-on-worse and something got worse, else 2 if fewer than --min-compared checks compared, else 0."""
+    if fail_on_worse and result["worse"]:
+        return 1
+    if min_compared is not None and result["compared"] < min_compared:
+        return 2
+    return 0
 
 
 def read_params(path):
@@ -421,7 +501,9 @@ def main(argv=None):
     p.add_argument("after")
     p.add_argument("--md", help="append the Markdown here (default: stdout)")
     p.add_argument("--json", help="write the comparison as JSON here")
-    p.add_argument("--fail-on-worse", action="store_true")
+    p.add_argument("--fail-on-worse", action="store_true", help="exit 1 if any vehicle item got worse")
+    p.add_argument("--min-compared", type=int, default=None,
+                   help="exit 2 if fewer than this many of the 10 vehicle checks could be compared")
     args = p.parse_args(argv)
     result, _, _ = compare_logs(args.before, args.after)
     md = render(result, os.path.basename(args.before), os.path.basename(args.after))
@@ -433,7 +515,7 @@ def main(argv=None):
     if args.json:
         with open(args.json, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=1, default=_plain)
-    return 1 if args.fail_on_worse and result["worse"] else 0
+    return exit_code(result, args.fail_on_worse, args.min_compared)
 
 
 if __name__ == "__main__":
