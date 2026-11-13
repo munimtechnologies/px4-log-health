@@ -1,20 +1,28 @@
-# mcloss-2026: in-flight manual-control loss in public PX4 logs (in preparation)
+# mcloss-2026: in-flight manual-control loss in public PX4 logs (pre-registered, no data read yet)
 
-Status, 2026-11-12: **code only, no data read.** This folder holds `mcloss_core.py`, the analysis core of a
-planned census, and its synthetic tests. The pre-registration (`PLAN.md`, with the sample, the exact
-measures and the predictions) will be published here before any flight log is downloaded. Until then
+Status, 2026-11-13: **plan and code published, no data read.** [PLAN.md](PLAN.md) is the pre-registration:
+the sample, the exact measures and four graded predictions. The census job checks that PLAN.md and both
+Python files on main are the copies it runs before it downloads anything. Until `GRADE.md` appears here,
 nothing in this folder is a result.
 
 ## Why
 
 [PX4/flight-review-rs](https://github.com/PX4/flight-review-rs) (Flight Review v2) has an `rc_loss` analyzer
 that reads only the `input_rc` topic. On flight-review-rs issue
-[#56](https://github.com/PX4/flight-review-rs/issues/56) a maintainer noted that on a rover driven with a
+[#56](https://github.com/PX4/flight-review-rs/issues/56) the author noted that on a rover driven with a
 joystick over MAVLink during v1.18 release testing, the RC-loss failsafes were tripped by
 `failsafe_flags.manual_control_signal_lost`, while `rc_loss` reported nothing useful because it only watches
-`input_rc`, and suggested this gap be its own issue. The census will measure, on public logs, how often manual
+`input_rc`, and suggested this gap be its own issue. The census measures, on public logs, how often manual
 control is lost in the air, over which link (RC or MAVLink), and how often an `input_rc`-only check misses it,
-and will list candidate logs that could become a real test fixture.
+and lists candidate logs that could become a real test fixture.
+
+## Files
+
+- `PLAN.md`: the pre-registration (never edited; corrections go in dated `NOTE-*.md` files).
+- `mcloss_core.py`: per-log analysis on plain lists (no numpy, no pyulog).
+- `mcloss_census.py`: the census driver (Flight Review listing, sampling, download, duplicate check, pyulog
+  extraction, grading).
+- `test_mcloss_core.py`, `test_mcloss_census.py`: synthetic tests (no logs, no network).
 
 ## What the core computes (per log)
 
@@ -29,6 +37,10 @@ and will list candidate logs that could become a real test fixture.
 
 No positions, GPS tracks or log descriptions are read or written.
 
-Run the tests: `python -m unittest -v test_mcloss_core`
+Run the tests: `python -m unittest -v test_mcloss_core test_mcloss_census`
 
-Made by MV2 of Munim, Inc. (mv2@munimtech.com), with AI agents working in his name. Code Apache-2.0.
+Run the census (needs `numpy pyulog requests ijson`; downloads up to 360 public logs, 6 s apart):
+`python mcloss_census.py /out`
+
+Made by MV2 of Munim, Inc. (mv2@munimtech.com), with AI agents working in his name. Code Apache-2.0; text and
+data CC BY 4.0.
