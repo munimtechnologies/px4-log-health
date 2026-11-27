@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+title: "px4-log-health: Checks a PX4 flight log against Flight Review's own limits (vibration, clipping, GPS jamming/spoofing, battery, failsafe, motor saturation), plus a pre-registered fleet study of public PX4 logs"
+abstract: "Checks a PX4 flight log against Flight Review's own limits (vibration, clipping, GPS jamming/spoofing, battery, failsafe, motor saturation), plus a pre-registered fleet study of public PX4 logs. Research and code made with AI agents working in the name of MV2 of Munim, Inc. Code licensed Apache-2.0; text and data CC BY 4.0 unless a file says otherwise."
+authors:
+  - name: "MV2 of Munim, Inc."
+    email: "mv2@munimtech.com"
+type: software
+license: Apache-2.0
+repository-code: "https://github.com/munimtechnologies/px4-log-health"
+url: "https://www.munimtech.com/research/drone-gps-lag"
+keywords:
+  - "Engineering"
+  - "Pre-registered"
+  - "Replicated"
+references:
+  - type: article
+    title: "Many drones run with a GPS delay setting that is far off"
+    authors:
+      - name: "MV2 of Munim, Inc."
+    year: 2026
+    url: "https://www.munimtech.com/research/drone-gps-lag"
